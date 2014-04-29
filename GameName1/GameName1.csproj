@@ -159,6 +159,8 @@
     <Content Include="Content\ThumbstickBottom.xnb" />
     <Content Include="Content\ThumbstickTop.xnb" />
     <Content Include="Content\Zombie.xnb" />
+    <Content Include="Content\RED.xnb" />
+    <Content Include="Content\ColunaFont.xnb" />
     <None Include="packages.config" />
     <None Include="Properties\AppManifest.xml" />
     <None Include="Properties\WMAppManifest.xml">
@@ -197,10 +199,6 @@
       <Project>{38C6014A-7647-44B1-AD8C-EDFB75AC5F18}</Project>
       <Name>FarSeerPort</Name>
     </ProjectReference>
-    <ProjectReference Include="..\XNAHelper\XNAHelper.csproj">
-      <Project>{D4F521A5-7066-4EF6-BB85-FF844BF6F750}</Project>
-      <Name>XNAHelper</Name>
-    </ProjectReference>
   </ItemGroup>
   <ItemGroup>
     <WCFMetadata Include="Service References\" />
@@ -225,6 +223,12 @@
   </Target>
   -->
   <ProjectExtensions />
-  <Import Project="..\packages\MonoGame.Binaries.3.2.0\build\wp8\MonoGame.Binaries.targets" Condition="Exists('..\packages\MonoGame.Binaries.3.2.0\build\wp8\MonoGame.Binaries.targets')" />
   <Import Project="$(SolutionDir)\.nuget\NuGet.targets" Condition="Exists('$(SolutionDir)\.nuget\NuGet.targets')" />
+  <Import Project="..\packages\MonoGame.Binaries.3.2.0\build\wp8\MonoGame.Binaries.targets" Condition="Exists('..\packages\MonoGame.Binaries.3.2.0\build\wp8\MonoGame.Binaries.targets')" />
+  <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
+    <PropertyGroup>
+      <ErrorText>This project references NuGet package(s) that are missing on this computer. Enable NuGet Package Restore to download them.  For more information, see http://go.microsoft.com/fwlink/?LinkID=322105. The missing file is {0}.</ErrorText>
+    </PropertyGroup>
+    <Error Condition="!Exists('..\packages\MonoGame.Binaries.3.2.0\build\wp8\MonoGame.Binaries.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\MonoGame.Binaries.3.2.0\build\wp8\MonoGame.Binaries.targets'))" />
+  </Target>
 </Project>
