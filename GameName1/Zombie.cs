@@ -31,7 +31,7 @@ namespace GameName1
         [IgnoreDataMember]
         static private Texture2D m_Texture = null;
         [IgnoreDataMember]
-        private float m_Speed = 0.5f;
+        private float m_Speed = 1.0f;
         [DataMember]
         public float Speed { get { return m_Speed; } set { m_Speed = value; } }
 
@@ -140,8 +140,10 @@ namespace GameName1
             {
                 m_State = MotionState.Locked;
             }
-
+            ObjectManager.GetCell(Position).Remove(this);
             Move(vec, elapsedTime);
+            ObjectManager.GetCell(Position).Add(this);
+
             bodyPosition = _circleBody.Position;
         }
         public override void Draw(SpriteBatch spriteBatch)

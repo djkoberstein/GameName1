@@ -140,6 +140,7 @@ namespace GameName1
                 case GameState.Playing:
                     if (TimeToDeath <= TimeSpan.FromSeconds(0))
                     {
+                        //SlowMotion = true;
                         ResetGame();
                     }
                     TimeToDeath -= gameTime.ElapsedGameTime;
@@ -162,7 +163,7 @@ namespace GameName1
                     //cleanup dead objects
                     GlobalObjectManager.Update(customElapsedTime);
 
-                    m_World.Step((float)gameTime.ElapsedGameTime.TotalMilliseconds * 0.002f);
+                    m_World.Step((float)customElapsedTime.TotalMilliseconds * 0.002f);
                     break;
                 case GameState.Menu:
                     bool toQuit;
@@ -207,10 +208,10 @@ namespace GameName1
 
         private void ResetGame()
         {
+            ObjectManager.ClearGrid();
             ObjectManager.AllGameObjects.Clear();
             GlobalObjectManager.ResetGame();
             TimeToDeath = TimeSpan.FromSeconds(40);
-            
         }
         private void SpawnFace()
         {

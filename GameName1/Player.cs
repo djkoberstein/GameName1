@@ -22,7 +22,7 @@ namespace GameName1
         [IgnoreDataMember]
         public static readonly string playerSaveDir = "playerDir";
         [IgnoreDataMember]
-        public static float VELOCITY = 50f;
+        public static float VELOCITY = 40f;
         public static int CheatEffectFrames;
         [IgnoreDataMember]
         public Vector2 m_MoveToward = new Vector2();
@@ -87,66 +87,70 @@ namespace GameName1
             //float nearestLength = float.MaxValue;
             DrawRedFlash = false;
             reset = false;
-            foreach (GameObject ob in ObjectManager.AllGameObjects)
+            List<List<GameObject>> objectsToCheck = ObjectManager.GetCellsOfRectangle(Bounds);
+            foreach (List<GameObject> gameObjectList in objectsToCheck)
             {
-                //TODO: seriously need to refactor this later
-                //its good to find the nearest zombie when i run through entire zombie list, but probably not here
-                //this code will find the nearest zombie for autoaim
-                //Vector2 vec = new Vector2(ob.Position.X - Position.X, ob.Position.Y - Position.Y);
-                //float temp = vec.LengthSquared();
-                //if (temp < nearestLength && ob is Zombie)
-                //{
-                //    nearestLength = temp;
-                //    if (!m_Weapon.Firing)
-                //    {
-                //        //RotationAngle = (float)Math.Atan2(vec.Y, vec.X);
-                //    }
-                //}
+                foreach (GameObject ob in gameObjectList)
+                {
+                    if (ob is Player) { continue; }
+                    //TODO: seriously need to refactor this later
+                    //its good to find the nearest zombie when i run through entire zombie list, but probably not here
+                    //this code will find the nearest zombie for autoaim
+                    //Vector2 vec = new Vector2(ob.Position.X - Position.X, ob.Position.Y - Position.Y);
+                    //float temp = vec.LengthSquared();
+                    //if (temp < nearestLength && ob is Zombie)
+                    //{
+                    //    nearestLength = temp;
+                    //    if (!m_Weapon.Firing)
+                    //    {
+                    //        //RotationAngle = (float)Math.Atan2(vec.Y, vec.X);
+                    //    }
+                    //}
 
-                if (ob == null)
-                {
-                    //need to handle null exeception here
-                    return;
-                }
-                if (ob.m_Bounds.Intersects(this.m_Bounds))
-                {
-                    if (ob is IEnemy)
+                    if (ob == null)
                     {
-                        IEnemy enemy = ob as IEnemy;
-                        LifeTotal -= enemy.GetDamageAmount();
-                        DrawRedFlash = true;
-                        if (LifeTotal <= 0)
-                        {
-                            reset = true;
-                            LifeTotal = 100;
-                            return;
-                        }
+                        //need to handle null exeception here
+                        return;
                     }
-                    if (ob is CheatPowerUp)
+                    if (ob.m_Bounds.Intersects(this.m_Bounds))
                     {
-                        if (ob is IInstant)
+                        if (ob is IEnemy)
                         {
-                            IInstant instantEffect = ob as IInstant;
-                            instantEffect.GetInstantEffect();
-                            WeaponSlot1Magic = null;
+                            IEnemy enemy = ob as IEnemy;
+                            LifeTotal -= enemy.GetDamageAmount();
+                            DrawRedFlash = true;
+                            if (LifeTotal <= 0)
+                            {
+                                reset = true;
+                                LifeTotal = 100;
+                                return;
+                            }
                         }
-                        else if (WeaponSlot1Magic == null)
+                        if (ob is CheatPowerUp)
                         {
-                            CheatPowerUp cheat = ob as CheatPowerUp;
-                            WeaponSlot1Magic = cheat;
+                            CheatPowerUp temp = ob as CheatPowerUp;
+                            if (temp.CheatEffect is IInstant)
+                            {
+                                IInstant instantEffect = temp.CheatEffect as IInstant;
+                                instantEffect.GetInstantEffect();
+                                WeaponSlot1Magic = null;
+                            }
+                            else if (WeaponSlot1Magic == null)
+                            {
+                                CheatPowerUp cheat = ob as CheatPowerUp;
+                                WeaponSlot1Magic = cheat;
+                            }
                         }
+                        if (ob is WeaponPowerUp)
+                        {
+                            Weapon weapon = WeaponPowerUp.GetWeaponType((WeaponPowerUp)ob);
+                            weapon.LoadContent();
+                            m_Weapon = weapon;
+                        }
+                        ObjectManager.RemoveObject(ob);
                     }
-                    if (ob is WeaponPowerUp)
-                    {
-                        Weapon weapon = WeaponPowerUp.GetWeaponType((WeaponPowerUp)ob);
-                        weapon.LoadContent();
-                        m_Weapon = weapon;
-                    }
-                    ObjectManager.RemoveObject(ob);
                 }
             }
-            //TODO: seriously need to refactor this later
-            //its good to find the nearest zombie when i run through entire zombie list, but probably not here
             if (m_Weapon.Firing || m_Weapon.BulletsExist)
             {
 
@@ -257,6 +261,7 @@ namespace GameName1
             {
                 KickedBack = false;
             }
+            ObjectManager.GetCell(Position).Remove(this);
             //should really just use the Sim's position for everything instead of converting from one to another
             Vector2 simPosition = ConvertUnits.ToDisplayUnits(_circleBody.Position);
             if (float.IsNaN(simPosition.X) || float.IsNaN(simPosition.Y))
@@ -280,8 +285,8 @@ namespace GameName1
                 Vector2 acceleration = new Vector2(Input.CurrentAccelerometerValues.X, Input.CurrentAccelerometerValues.Y);
                 if (acceleration.LengthSquared() > Input.Tilt_Threshold)
                 {
-                    m_MoveToward = new Vector2(MathHelper.Clamp(acceleration.X * 50, -(Math.Abs(acceleration.X) * VELOCITY), Math.Abs(acceleration.X) * VELOCITY),
-                                                -1 * MathHelper.Clamp(acceleration.Y * 50, -(Math.Abs(acceleration.Y) * VELOCITY), Math.Abs(acceleration.Y) * VELOCITY));
+                    m_MoveToward = new Vector2(MathHelper.Clamp(acceleration.X * 30, -(Math.Abs(acceleration.X) * VELOCITY), Math.Abs(acceleration.X) * VELOCITY),
+                                                -1 * MathHelper.Clamp(acceleration.Y * 30, -(Math.Abs(acceleration.Y) * VELOCITY), Math.Abs(acceleration.Y) * VELOCITY));
                     if (!m_Weapon.Firing)
                     {
                         //dont apply rotation unless tilt amount is greater than a threshold
@@ -313,6 +318,7 @@ namespace GameName1
             {
                 _circleBody.Position = ConvertUnits.ToSimUnits(this.Position);
             }
+            ObjectManager.GetCell(Position).Add(this);
             Vector2 playerVel = m_Moving ? m_MoveToward : new Vector2(0, 0);
             m_Weapon.Update(Position, playerVel, RotationAngle, 10, isFireButtonDown, elapsedTime);
         }

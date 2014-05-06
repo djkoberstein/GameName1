@@ -157,6 +157,7 @@ namespace GameName1
             spriteBatch.Draw(m_StatusBackground, m_StatusBackgroundPosition, null, Color.White, 0.0f, new Vector2(0.0f,0.0f), m_StatusBackGroundScale, SpriteEffects.None, 0.0f);
             //TODO CHANGE THE MAGIC NUMBERS HERE                                                          \/\/\/
             spriteBatch.DrawString(m_SpriteFont, "Life: " + p.LifeTotal, new Vector2(PlayfieldBottom - 50, GameHeight - 550), Color.White, Utilities.DegreesToRadians(90.0f), new Vector2(0, 0), 1f, SpriteEffects.None, 0.0f);
+            spriteBatch.DrawString(m_SpriteFont, "XP: " + p.Score, new Vector2(PlayfieldBottom - 80, GameHeight - 550), Color.White, Utilities.DegreesToRadians(90.0f), new Vector2(0, 0), 1f, SpriteEffects.None, 0.0f);
             spriteBatch.Draw(m_FireButton, FireButtonPosition, null, m_FireButtonColor, 0.0f, new Vector2(0, 0), m_FireButtonScale, SpriteEffects.None, 0);
             spriteBatch.Draw(m_ThumbStickBottomTexture, StopButtonPosition, null, m_StopButtonColor, 0.0f, new Vector2(0,0), m_StopButtonScale, SpriteEffects.None, 0);
             
@@ -181,7 +182,7 @@ namespace GameName1
         public void DrawBackground(SpriteBatch spriteBatch)
         {
             spriteBatch.Draw(m_Background, new Vector2(OFFSET, 0), Color.White);
-            spriteBatch.DrawString(ColunaFont, m_TimeToDeathString, new Vector2(GameWidth - 125, 0 + 25), Color.Red * 0.45f, Utilities.DegreesToRadians(90.0f), new Vector2(0, 0), new Vector2(5,3), SpriteEffects.None, 0.0f);
+            spriteBatch.DrawString(ColunaFont, m_TimeToDeathString, new Vector2(GameWidth - 175, 300), Color.Red * 0.45f, Utilities.DegreesToRadians(90.0f), new Vector2(0, 0), new Vector2(3,2), SpriteEffects.None, 0.0f);
         }
     }
 }
