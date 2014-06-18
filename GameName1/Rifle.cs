@@ -1,4 +1,5 @@
 ﻿using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Audio;
 using Microsoft.Xna.Framework.Graphics;
 using System;
 using System.Collections.Generic;
@@ -12,6 +13,7 @@ namespace GameName1
     [DataContract]
     public class Rifle : Weapon
     {
+        private const int CHARGE_TIME = 20;
         [DataMember]
         public string shotString1 { get; set; }
         [DataMember]
@@ -30,8 +32,10 @@ namespace GameName1
         public SpriteInfo CurrentShotInfo { get { return m_CurrentShotInfo; } set { m_CurrentShotInfo = value; } }
 
         private AnimationManager m_FireAnimation;
+        private SoundEffectInstance m_ChargeSound;
         public Rifle() : base()
         {
+            Name = "Rifle";
             Spread = (float)Math.PI / 6;
             NumberOfBullets = 1;
             FireRate = 15;
@@ -84,7 +88,31 @@ namespace GameName1
                 m_FireAnimation.SpriteInfo = m_CurrentShotInfo;
                 CanDamage = false;
                 if (m_FireAnimation.CanStartAnimating())
+                {
                     m_FireAnimation.Finished = false;
+                }
+                if (m_ChargeSound != null)
+                {
+                    m_ChargeSound.Stop();
+                    m_ChargeSound.Dispose();
+                }
+                m_ChargeSound = SoundBank.GetSoundInstance("SoundRifleCharge");
+                m_ChargeSound.Play();
+            }
+            if (m_FireAnimation.Animating && m_FireAnimation.FrameCounter == CHARGE_TIME)
+            {
+                if (m_ShotSound != null)
+                {
+                    m_ShotSound.Stop();
+                    m_ShotSound.Dispose();
+                }
+                if (m_ChargeSound != null)
+                {
+                    m_ChargeSound.Stop();
+                    m_ChargeSound.Dispose();
+                }
+                m_ShotSound = SoundBank.GetSoundInstance("SoundRifleShot");
+                m_ShotSound.Play();
             }
         }
         //returns true if enemy died
@@ -113,6 +141,10 @@ namespace GameName1
                 }
             }
             return false;
+        }
+        public override void ApplyKickback(Player p)
+        {
+            
         }
         public override void DrawWeapon(SpriteBatch _spriteBatch, Vector2 position, float rot)
         {
@@ -157,9 +189,54 @@ namespace GameName1
         protected override void LoadTextures()
         {
             AnimationInfo[] array = new AnimationInfo[2];
-            array[0] = new AnimationInfo(TextureBank.GetTexture(shotString1), 20);
+            array[0] = new AnimationInfo(TextureBank.GetTexture(shotString1), CHARGE_TIME);
             array[1] = new AnimationInfo(TextureBank.GetTexture(shotString2), -1);
             m_FireAnimation = new AnimationManager(array, m_SavedShotInfo, 60);
+        }
+        public override void ExplodeEnemy(Vector2 intersectingAngle, IEnemy enemy, Vector2 pos)
+        {
+            List<Texture2D> gibTextures = enemy.GetExplodedParts();
+            float spreadAngle = 180;
+            float singleAngle = (spreadAngle / (float)gibTextures.Count);
+            float startingPoint = singleAngle * gibTextures.Count / 2;
+            for (int i = 0; i < gibTextures.Count; ++i)
+            {
+                ExplodedPart gib = new ExplodedPart();
+                gib.LoadContent(gibTextures[i], pos);
+                Vector2 halfAngle = Utilities.RadiansToVector2(Utilities.DegreesToRadians(-30));
+                gib.ApplyLinearForce(intersectingAngle - (halfAngle) + (i * 2 * halfAngle), Knockback);
+                //should be randomixed
+                gib.ApplyTorque(5000f);
+                UI.ActiveGibs.Add(gib);
+            }
+        }
+        private static WeaponStats WeaponStats = new WeaponStats();
+        public override WeaponStats GetWeaponStats()
+        {
+            return WeaponStats;
+        }
+        public override void SetWeaponStats()
+        {
+            switch (WeaponStats.WeaponLevel)
+            {
+                case 0:
+                    WeaponStats.WeaponDamage = 10;
+                    WeaponStats.NextUpgradeCost = 100;
+                    break;
+                case 1:
+                    WeaponStats.WeaponDamage = 12;
+                    WeaponStats.NextUpgradeCost = 200;
+                    break;
+                case 2:
+                    WeaponStats.WeaponDamage = 18;
+                    WeaponStats.NextUpgradeCost = 500;
+                    break;
+            }
+        }
+        public override void UpgradeWeaponStats()
+        {
+            WeaponStats.WeaponLevel++;
+            SetWeaponStats();
         }
     }
 }

@@ -13,7 +13,7 @@ using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 #endregion
 
-namespace GameStateManagement
+namespace GameName1
 {
     /// <summary>
     /// Helper class represents a single entry in a MenuScreen. By default this
@@ -28,7 +28,7 @@ namespace GameStateManagement
         /// <summary>
         /// The text rendered for this entry.
         /// </summary>
-        string text;
+        protected string text;
 
         /// <summary>
         /// Tracks a fading selection effect on the entry.
@@ -36,13 +36,13 @@ namespace GameStateManagement
         /// <remarks>
         /// The entries transition out of the selection effect when they are deselected.
         /// </remarks>
-        float selectionFade;
+        protected float selectionFade;
 
         /// <summary>
         /// The position at which the entry is drawn. This is set by the MenuScreen
         /// each frame in Update.
         /// </summary>
-        Vector2 position;
+        protected Vector2 position;
 
         #endregion
 
@@ -77,7 +77,7 @@ namespace GameStateManagement
         /// <summary>
         /// Event raised when the menu entry is selected.
         /// </summary>
-        public event EventHandler<PlayerIndexEventArgs> Selected;
+        public virtual event EventHandler<PlayerIndexEventArgs> Selected;
 
 
         /// <summary>

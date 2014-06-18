@@ -11,6 +11,7 @@ using System.Runtime.Serialization;
 using System.IO.IsolatedStorage;
 using FarseerPhysics.Factories;
 using FarseerPhysics;
+using Microsoft.Xna.Framework.Audio;
 
 namespace GameName1
 {
@@ -19,11 +20,21 @@ namespace GameName1
     [DataContract]
     public class Player : GameObject
     {
+        private enum PlayerState
+        {
+            Normal,
+            Damaged,
+            Dead
+        }
         [IgnoreDataMember]
         public static readonly string playerSaveDir = "playerDir";
         [IgnoreDataMember]
         public static float VELOCITY = 40f;
-        public static int CheatEffectFrames;
+
+        //how many frames of invincible to occur when player is damaged
+        private const int INVINCIBLE_FRAMES = 100;
+        //how many frames to wait until a flash occurs when being hit, done via modulo
+        private const int INVINCIBLE_FLASH_FRAME = 15;
         [IgnoreDataMember]
         public Vector2 m_MoveToward = new Vector2();
         [DataMember]
@@ -42,6 +53,8 @@ namespace GameName1
         [DataMember]
         public CheatPowerUp WeaponSlot1Magic { get; set; }
         private List<Cheat> m_ActiveEffects = new List<Cheat>();
+        private PlayerState m_PlayerState;
+        private SoundEffectInstance m_PowerupPickupSound;
         [DataMember]
         public int Score { get; set; }
         [DataMember]
@@ -59,6 +72,8 @@ namespace GameName1
         public Texture2D RedFlashTexture;
 
         public bool DrawRedFlash;
+        private int m_HowLongInvincible = 0;
+        private Vector2 m_InitialPosition;
         public Player() : base()
         {
 			
@@ -82,11 +97,11 @@ namespace GameName1
             IsStopDown = false;
             DrawRedFlash = false;
         }
-        public void CheckCollisions(out bool reset, World _world)
+        public void CheckCollisions(out bool isDead, World _world)
         {
             //float nearestLength = float.MaxValue;
             DrawRedFlash = false;
-            reset = false;
+            isDead = false;
             List<List<GameObject>> objectsToCheck = ObjectManager.GetCellsOfRectangle(Bounds);
             foreach (List<GameObject> gameObjectList in objectsToCheck)
             {
@@ -95,62 +110,69 @@ namespace GameName1
                     if (ob is Player) { continue; }
                     //TODO: seriously need to refactor this later
                     //its good to find the nearest zombie when i run through entire zombie list, but probably not here
-                    //this code will find the nearest zombie for autoaim
-                    //Vector2 vec = new Vector2(ob.Position.X - Position.X, ob.Position.Y - Position.Y);
-                    //float temp = vec.LengthSquared();
-                    //if (temp < nearestLength && ob is Zombie)
-                    //{
-                    //    nearestLength = temp;
-                    //    if (!m_Weapon.Firing)
-                    //    {
-                    //        //RotationAngle = (float)Math.Atan2(vec.Y, vec.X);
-                    //    }
-                    //}
 
                     if (ob == null)
                     {
                         //need to handle null exeception here
-                        return;
+                        gameObjectList.Remove(ob);
+                        continue;
                     }
                     if (ob.m_Bounds.Intersects(this.m_Bounds))
                     {
-                        if (ob is IEnemy)
+                        if (ob is IEnemy && m_PlayerState != PlayerState.Damaged)
                         {
                             IEnemy enemy = ob as IEnemy;
-                            LifeTotal -= enemy.GetDamageAmount();
-                            DrawRedFlash = true;
+                            //do collision should take care of removing the enemy
+                            enemy.DoCollision(this);
                             if (LifeTotal <= 0)
                             {
-                                reset = true;
-                                LifeTotal = 100;
+                                isDead = true;
+                                //LifeTotal = 100;
+                                m_PlayerState = PlayerState.Dead;
                                 return;
                             }
+                            m_PlayerState = PlayerState.Damaged;
+                            DrawRedFlash = true;
+                            continue;
                         }
-                        if (ob is CheatPowerUp)
+                        if (ob is PowerUp)
                         {
-                            CheatPowerUp temp = ob as CheatPowerUp;
-                            if (temp.CheatEffect is IInstant)
+                            if (m_PowerupPickupSound != null)
                             {
-                                IInstant instantEffect = temp.CheatEffect as IInstant;
-                                instantEffect.GetInstantEffect();
-                                WeaponSlot1Magic = null;
+                                m_PowerupPickupSound.Stop();
+                                m_PowerupPickupSound.Dispose();
                             }
-                            else if (WeaponSlot1Magic == null)
+                            m_PowerupPickupSound = ((PowerUp)ob).GetPickupSound();
+                            m_PowerupPickupSound.Play();
+                            if (ob is CheatPowerUp)
                             {
-                                CheatPowerUp cheat = ob as CheatPowerUp;
-                                WeaponSlot1Magic = cheat;
+                                CheatPowerUp temp = ob as CheatPowerUp;
+                                if (temp.CheatEffect is IInstant)
+                                {
+                                    IInstant instantEffect = temp.CheatEffect as IInstant;
+                                    instantEffect.GetInstantEffect();
+                                    WeaponSlot1Magic = null;
+                                }
+                                else if (WeaponSlot1Magic == null)
+                                {
+                                    CheatPowerUp cheat = ob as CheatPowerUp;
+                                    WeaponSlot1Magic = cheat;
+                                }
                             }
+                            if (ob is WeaponPowerUp)
+                            {
+                                Weapon weapon = WeaponPowerUp.GetWeaponType((WeaponPowerUp)ob);
+                                weapon.LoadContent();
+                                m_Weapon = weapon;
+                            }
+                            ObjectManager.RemoveObject(ob);
                         }
-                        if (ob is WeaponPowerUp)
-                        {
-                            Weapon weapon = WeaponPowerUp.GetWeaponType((WeaponPowerUp)ob);
-                            weapon.LoadContent();
-                            m_Weapon = weapon;
-                        }
-                        ObjectManager.RemoveObject(ob);
                     }
                 }
             }
+        }
+        public void CheckWeaponHits()
+        {
             if (m_Weapon.Firing || m_Weapon.BulletsExist)
             {
 
@@ -171,13 +193,14 @@ namespace GameName1
         }
         public void LoadContent(World world)
         {
+            m_InitialPosition = Position;
             Texture = TextureBank.GetTexture("Player");
             base.LoadContent();
             m_Weapon.LoadContent();
 
             _circleBody = BodyFactory.CreateCircle(world, ConvertUnits.ToSimUnits(35 / 2f), 1f, ConvertUnits.ToSimUnits(Position));
             _circleBody.BodyType = BodyType.Dynamic;
-            _circleBody.Mass = 0.2f;
+            _circleBody.Mass = 4f;
             _circleBody.LinearDamping = 2f;
             if (!float.IsNaN(this.Position.X) && !float.IsNaN(this.Position.Y))
             {
@@ -233,121 +256,141 @@ namespace GameName1
 
         public void Update(TimeSpan elapsedTime)
         {
-            //must be a better way to do this...
-            foreach (Cheat cheat in m_ActiveEffects)
+            switch (m_PlayerState)
             {
-                if (cheat.IsDone())
-                {
-                    cheat.EndEffect(this);
-                }
-            }
-            m_ActiveEffects.RemoveAll(x => x.IsDone() || x == null);
-            foreach (Cheat cheat in m_ActiveEffects)
-            {
-                if (cheat == null) continue;
-                cheat.Update(this);
-            }
-
-            if (!KickedBack && isFireButtonDown && m_Weapon.CanFire())
-            {
-                KickedBack = true;
-                if (m_Weapon is Shotgun)
-                {
-                    Vector2 temp = new Vector2((float)Math.Cos(RotationAngle), (float)Math.Sin(RotationAngle)) * -50;
-                    this._circleBody.ApplyLinearImpulse(temp);
-                }
-            }
-            if (!m_Weapon.Firing && KickedBack)
-            {
-                KickedBack = false;
-            }
-            ObjectManager.GetCell(Position).Remove(this);
-            //should really just use the Sim's position for everything instead of converting from one to another
-            Vector2 simPosition = ConvertUnits.ToDisplayUnits(_circleBody.Position);
-            if (float.IsNaN(simPosition.X) || float.IsNaN(simPosition.Y))
-            {
-                return;
-            }
-            else
-            {
-                this.Position = simPosition;
-            }
-
-            if (!Input.UseAccelerometer)
-            {
-                if ((m_MoveToward.X == Position.X && m_MoveToward.Y == Position.Y))
-                {
-                    m_Moving = false;
-                }
-            }
-            else
-            {
-                Vector2 acceleration = new Vector2(Input.CurrentAccelerometerValues.X, Input.CurrentAccelerometerValues.Y);
-                if (acceleration.LengthSquared() > Input.Tilt_Threshold)
-                {
-                    m_MoveToward = new Vector2(MathHelper.Clamp(acceleration.X * 30, -(Math.Abs(acceleration.X) * VELOCITY), Math.Abs(acceleration.X) * VELOCITY),
-                                                -1 * MathHelper.Clamp(acceleration.Y * 30, -(Math.Abs(acceleration.Y) * VELOCITY), Math.Abs(acceleration.Y) * VELOCITY));
-                    if (!m_Weapon.Firing)
+                case PlayerState.Damaged:
+                case PlayerState.Normal:
+                    UpdatePlayerState();
+                    //must be a better way to do this...
+                    foreach (Cheat cheat in m_ActiveEffects)
                     {
-                        //dont apply rotation unless tilt amount is greater than a threshold
-                        //if (!IsStopDown)
-                        //{
-                        //    RotationAngle = (float)Math.Atan2(-acceleration.Y, acceleration.X);
-                        //}
-                        //RotationAngle = UI.ThumbStickAngle;
+                        if (cheat.IsDone())
+                        {
+                            cheat.EndEffect(this);
+                        }
                     }
-                }
-                else
-                {
-                    m_MoveToward = new Vector2(0, 0);
-                }
-                if (!m_Weapon.Firing)
-                {
-                    RotationAngle = UI.ThumbStickAngle;
-                }
+                    m_ActiveEffects.RemoveAll(x => x.IsDone() || x == null);
+                    foreach (Cheat cheat in m_ActiveEffects)
+                    {
+                        if (cheat == null) continue;
+                        cheat.Update(this);
+                    }
+                    if (!KickedBack && isFireButtonDown && m_Weapon.CanFire())
+                    {
+                        KickedBack = true;
+                        Weapon.ApplyKickback(this);
+                    }
+                    if (!m_Weapon.Firing && KickedBack)
+                    {
+                        KickedBack = false;
+                    }
+                    ObjectManager.GetCell(Position).Remove(this);
+                    //should really just use the Sim's position for everything instead of converting from one to another
+                    Vector2 simPosition = ConvertUnits.ToDisplayUnits(_circleBody.Position);
+                    if (float.IsNaN(simPosition.X) || float.IsNaN(simPosition.Y))
+                    {
+                        return;
+                    }
+                    else
+                    {
+                        this.Position = simPosition;
+                    }
+
+                    if (!Input.UseAccelerometer)
+                    {
+                        if ((m_MoveToward.X == Position.X && m_MoveToward.Y == Position.Y))
+                        {
+                            m_Moving = false;
+                        }
+                    }
+                    else
+                    {
+                        Vector2 acceleration = new Vector2(Input.CurrentAccelerometerValues.X, Input.CurrentAccelerometerValues.Y);
+                        if (acceleration.LengthSquared() > Input.Tilt_Threshold)
+                        {
+                            m_MoveToward = new Vector2(MathHelper.Clamp(acceleration.X * 30, -(Math.Abs(acceleration.X) * VELOCITY), Math.Abs(acceleration.X) * VELOCITY),
+                                                        -1 * MathHelper.Clamp(acceleration.Y * 30, -(Math.Abs(acceleration.Y) * VELOCITY), Math.Abs(acceleration.Y) * VELOCITY));
+                            if (!m_Weapon.Firing)
+                            {
+                                //dont apply rotation unless tilt amount is greater than a threshold
+                                //if (!IsStopDown)
+                                //{
+                                //    RotationAngle = (float)Math.Atan2(-acceleration.Y, acceleration.X);
+                                //}
+                                //RotationAngle = UI.ThumbStickAngle;
+                            }
+                        }
+                        else
+                        {
+                            m_MoveToward = new Vector2(0, 0);
+                        }
+                        if (!m_Weapon.Firing)
+                        {
+                            RotationAngle = UI.ThumbStickAngle;
+                        }
+                    }
+                    if (m_Moving && m_Weapon.Firing && m_Weapon.CanMoveWhileShooting)
+                    {
+                        Move(m_MoveToward, elapsedTime);
+                    }
+                    else if (m_Moving && !m_Weapon.Firing)
+                    {
+                        Move(m_MoveToward, elapsedTime);
+                    }
+                    if (!float.IsNaN(this.Position.X) && !float.IsNaN(this.Position.Y))
+                    {
+                        _circleBody.Position = ConvertUnits.ToSimUnits(this.Position);
+                    }
+                    ObjectManager.GetCell(Position).Add(this);
+                    Vector2 playerVel = m_Moving ? m_MoveToward : new Vector2(0, 0);
+                    m_Weapon.Update(Position, playerVel, RotationAngle, 10, isFireButtonDown, elapsedTime);
+                    break;
+                case PlayerState.Dead:
+                    //update animation logic for playing death animation
+                    break;
             }
-            if (m_Moving && m_Weapon.Firing && m_Weapon.CanMoveWhileShooting)
-            {
-                Move(m_MoveToward, elapsedTime);
-            }
-            else if (m_Moving && !m_Weapon.Firing)
-            {
-                Move(m_MoveToward, elapsedTime);
-            }
-            if (!float.IsNaN(this.Position.X) && !float.IsNaN(this.Position.Y))
-            {
-                _circleBody.Position = ConvertUnits.ToSimUnits(this.Position);
-            }
-            ObjectManager.GetCell(Position).Add(this);
-            Vector2 playerVel = m_Moving ? m_MoveToward : new Vector2(0, 0);
-            m_Weapon.Update(Position, playerVel, RotationAngle, 10, isFireButtonDown, elapsedTime);
         }
 
         public override void Draw(SpriteBatch _spriteBatch)
         {
-            if (IsStopDown)
+            switch (m_PlayerState)
             {
-                Vector2 aimScale = Utilities.GetSpriteScaling(new Vector2(UI.StopButtonRec.Width, UI.StopButtonRec.Height), new Vector2(AimCircleTexture.Width, AimCircleTexture.Height));
-                Texture2D temp;
-                if (UI.ThumbStickPointOffset.LengthSquared() > (UI.StopButtonRec.Width / 2) * (UI.StopButtonRec.Width / 2))
-                {
-                    temp = AimCircleRedTexture;
-                }
-                else
-                {
-                    temp = AimCircleTexture;
-                }
-                _spriteBatch.Draw(temp, Position, null, Color.White, 0.0f, new Vector2(AimCircleTexture.Width / 2, AimCircleTexture.Height / 2), aimScale, SpriteEffects.None, 0);
-            }
-            base.Draw(_spriteBatch);
-            
-            m_Weapon.DrawBlast(_spriteBatch, Position, RotationAngle);
-            if (IsStopDown)
-            {
-                _spriteBatch.Draw(ReticuleTexture, Position + UI.ThumbStickPointOffset, null, Color.White, 0.0f, new Vector2(7, 7), 1.0f, SpriteEffects.None, 0);
+                case PlayerState.Damaged:
+                case PlayerState.Normal:
+                    if (IsStopDown)
+                    {
+                        Vector2 aimScale = Utilities.GetSpriteScaling(new Vector2(UI.StopButtonRec.Width, UI.StopButtonRec.Height), new Vector2(AimCircleTexture.Width, AimCircleTexture.Height));
+                        Texture2D temp;
+                        if (UI.ThumbStickPointOffset.LengthSquared() > (UI.StopButtonRec.Width / 2) * (UI.StopButtonRec.Width / 2))
+                        {
+                            temp = AimCircleRedTexture;
+                        }
+                        else
+                        {
+                            temp = AimCircleTexture;
+                        }
+                        _spriteBatch.Draw(temp, Position, null, Color.White, 0.0f, new Vector2(AimCircleTexture.Width / 2, AimCircleTexture.Height / 2), aimScale, SpriteEffects.None, 0);
+                    }
+                    if ((m_PlayerState != PlayerState.Damaged) || (m_PlayerState == PlayerState.Damaged && CanDrawWhenFlashing()))
+                    {
+                        base.Draw(_spriteBatch);
+
+                        m_Weapon.DrawBlast(_spriteBatch, Position, RotationAngle);
+                    }
+                    if (IsStopDown)
+                    {
+                        _spriteBatch.Draw(ReticuleTexture, Position + UI.ThumbStickPointOffset, null, Color.White, 0.0f, new Vector2(7, 7), 1.0f, SpriteEffects.None, 0);
+                    }
+                    break;
+                case PlayerState.Dead:
+                    PlayDeathAnimation(_spriteBatch);
+                    break;
             }
         }
-
+        public void ApplyLinearForce(Vector2 force)
+        {
+            this._circleBody.ApplyLinearImpulse(force);
+        }
         public override void Save()
         {
             Storage.Save<Player>(Player.playerSaveDir, "player1", this);
@@ -386,6 +429,53 @@ namespace GameName1
                 WeaponSlot1Magic.CheatEffect.StartEffect(this);
                 WeaponSlot1Magic = null;
             }
+        }
+        private void UpdatePlayerState()
+        {
+            switch (m_PlayerState)
+            {
+                case PlayerState.Damaged:
+                if (m_HowLongInvincible >= INVINCIBLE_FRAMES)
+                {
+                    m_HowLongInvincible = 0;
+                    m_PlayerState = PlayerState.Normal;
+                    return;
+                }
+                ++m_HowLongInvincible;
+                break;
+            }
+        }
+        private bool CanDrawWhenFlashing()
+        {
+            bool temp = m_HowLongInvincible % INVINCIBLE_FLASH_FRAME != 0;
+            return temp;
+        }
+
+        private int m_CurrentDeathFrame = 0;
+        private Color m_CurrentDeathColor = new Color(0,249,0);
+        public bool isDead = false;
+        private void PlayDeathAnimation(SpriteBatch spriteBatch)
+        {
+            m_CurrentDeathColor = new Color(m_CurrentDeathFrame, 249 - m_CurrentDeathFrame, m_CurrentDeathFrame/2);
+            spriteBatch.Draw(Texture, Position, null, m_CurrentDeathColor, RotationAngle, m_Origin, 1.0f, SpriteEffects.None, 0f);
+            ++m_CurrentDeathFrame;
+            if (m_CurrentDeathFrame >= 250)
+            {
+                isDead = true;
+            }
+        }
+
+        //i should use this to reset the player during a game reset
+        public void ResetPlayer()
+        {
+            isDead = false;
+            m_CurrentDeathFrame = 0;
+            Position = m_InitialPosition;
+        }
+
+        public void SetPlayerToDyingState()
+        {
+            m_PlayerState = PlayerState.Dead;
         }
     }
 }

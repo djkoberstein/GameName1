@@ -19,7 +19,7 @@ using System.IO;
 using System.IO.IsolatedStorage;
 #endregion
 
-namespace GameStateManagement
+namespace GameName1
 {
     /// <summary>
     /// The screen manager is a component which manages one or more GameScreen
@@ -27,18 +27,20 @@ namespace GameStateManagement
     /// methods at the appropriate times, and automatically routes input to the
     /// topmost active screen.
     /// </summary>
-    public class ScreenManager : DrawableGameComponent
+    public class ScreenManager
     {
         #region Fields
 
         List<GameScreen> screens = new List<GameScreen>();
         List<GameScreen> screensToUpdate = new List<GameScreen>();
 
-        InputState input = new InputState();
+        Input input = new Input();
 
         SpriteBatch spriteBatch;
         SpriteFont font;
         Texture2D blankTexture;
+        public static Game Game;
+        public static GraphicsDevice GraphicsDevice;
 
         bool isInitialized;
 
@@ -90,21 +92,20 @@ namespace GameStateManagement
         /// Constructs a new screen manager component.
         /// </summary>
         public ScreenManager(Game game)
-            : base(game)
+            
         {
             // we must set EnabledGestures before we can query for them, but
             // we don't assume the game wants to read them.
             TouchPanel.EnabledGestures = GestureType.None;
+            Game = game;
         }
 
 
         /// <summary>
         /// Initializes the screen manager component.
         /// </summary>
-        public override void Initialize()
+        public void Initialize()
         {
-            base.Initialize();
-
             isInitialized = true;
         }
 
@@ -112,14 +113,14 @@ namespace GameStateManagement
         /// <summary>
         /// Load your graphics content.
         /// </summary>
-        protected override void LoadContent()
+        public void LoadContent(GraphicsDevice device, SpriteBatch _spriteBatch)
         {
             // Load content belonging to the screen manager.
             ContentManager content = Game.Content;
-
-            spriteBatch = new SpriteBatch(GraphicsDevice);
-            font = content.Load<SpriteFont>("menufont");
-            blankTexture = content.Load<Texture2D>("blank");
+            GraphicsDevice = device;
+            spriteBatch = _spriteBatch;
+            font = content.Load<SpriteFont>("GSMmenufont");
+            blankTexture = content.Load<Texture2D>("GSMblank");
 
             // Tell each of the screens to load their content.
             foreach (GameScreen screen in screens)
@@ -132,7 +133,7 @@ namespace GameStateManagement
         /// <summary>
         /// Unload your graphics content.
         /// </summary>
-        protected override void UnloadContent()
+        public void UnloadContent()
         {
             // Tell each of the screens to unload their content.
             foreach (GameScreen screen in screens)
@@ -150,7 +151,7 @@ namespace GameStateManagement
         /// <summary>
         /// Allows each screen to run logic.
         /// </summary>
-        public override void Update(GameTime gameTime)
+        public void Update(GameTime gameTime)
         {
             // Read the keyboard and gamepad.
             input.Update();
@@ -218,8 +219,9 @@ namespace GameStateManagement
         /// <summary>
         /// Tells each screen to draw itself.
         /// </summary>
-        public override void Draw(GameTime gameTime)
+        public void Draw(GameTime gameTime)
         {
+            GraphicsDevice.SetRenderTarget(null);
             foreach (GameScreen screen in screens)
             {
                 if (screen.ScreenState == ScreenState.Hidden)
@@ -243,11 +245,16 @@ namespace GameStateManagement
             screen.ControllingPlayer = controllingPlayer;
             screen.ScreenManager = this;
             screen.IsExiting = false;
-
             // If we have a graphics device, tell the screen to load content.
             if (isInitialized)
             {
-                screen.LoadContent();
+                try
+                {
+                    screen.LoadContent();
+                }
+                catch (Exception)
+                {
+                }
             }
 
             screens.Add(screen);

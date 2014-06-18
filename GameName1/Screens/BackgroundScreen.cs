@@ -14,7 +14,7 @@ using Microsoft.Xna.Framework.Content;
 using Microsoft.Xna.Framework.Graphics;
 #endregion
 
-namespace GameStateManagement
+namespace GameName1
 {
     /// <summary>
     /// The background screen sits behind all the other menu screens.
@@ -53,9 +53,9 @@ namespace GameStateManagement
         public override void LoadContent()
         {
             if (content == null)
-                content = new ContentManager(ScreenManager.Game.Services, "Content");
+                content = ScreenManager.Game.Content;
 
-            backgroundTexture = content.Load<Texture2D>("background");
+            backgroundTexture = content.Load<Texture2D>("GSMbackground");
         }
 
 
@@ -64,7 +64,7 @@ namespace GameStateManagement
         /// </summary>
         public override void UnloadContent()
         {
-            content.Unload();
+            //content.Unload();
         }
 
 

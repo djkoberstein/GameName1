@@ -1,4 +1,5 @@
 ﻿using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Audio;
 using Microsoft.Xna.Framework.Graphics;
 using System;
 using System.Collections.Generic;
@@ -31,9 +32,18 @@ namespace GameName1
         [DataMember]
         public SpriteInfo CurrentShotInfo { get { return m_CurrentShotInfo; } set { m_CurrentShotInfo = value; } }
 
+        private SoundEffectInstance m_ReloadSound;
         private AnimationManager m_FireAnimation;
+
+        private int m_ShotgunDamage;
+        public int ShotgunDamage
+        {
+            get { return m_ShotgunDamage; }
+            set { m_ShotgunDamage = value; }
+        }
         public Shotgun() : base()
         {
+            Name = "Shotgun";
             Spread = (float)Math.PI / 6;
             NumberOfBullets = 3;
             FireRate = 15;
@@ -42,7 +52,7 @@ namespace GameName1
             blast3String = "Shotgun-Blast-3";
             blast4String = "Shotgun-Blast-4";
             SightRange = 100;
-            Knockback = 250f;
+            Knockback = 1000f;
             CanMoveWhileShooting = true;
             BulletsExist = false;
         }
@@ -54,6 +64,7 @@ namespace GameName1
             {
                 m_BulletLines.Add(new Line());
             }
+            m_ShotgunDamage = WeaponStats.WeaponDamage;
         }
         //foreach line of the shotgun i need to update the lines based on the player center,
         //and rotate it and give it length, then update the graphical lines
@@ -78,6 +89,18 @@ namespace GameName1
             //firing a shot, save the state
             if (!Firing && shotFired && CanFire())
             {
+                if (m_ShotSound != null)
+                {
+                    m_ShotSound.Stop();
+                    m_ShotSound.Dispose();
+                }
+                if (m_ReloadSound != null)
+                {
+                    m_ReloadSound.Stop();
+                    m_ReloadSound.Dispose();
+                }
+                m_ShotSound = SoundBank.GetSoundInstance("SoundShotgun");
+                m_ShotSound.Play();
                 Firing = true;
                 m_FireAnimation.SpriteInfo = m_CurrentShotInfo;
                 CanDamage = true;
@@ -98,15 +121,17 @@ namespace GameName1
                 if (check.X != -1)
                 {
                     Vector2 intersectingAngle = new Vector2(line.P2.X - line.P1.X, line.P2.Y - line.P1.Y);
+                    intersectingAngle.Normalize();
                     IEnemy enemy;
                     if ((enemy = ob as IEnemy) != null)
                     {
-                        enemy.ApplyLinearForce(intersectingAngle, Knockback);
-                        enemy.AddToHealth(-10);
+                        enemy.AddToHealth(-m_ShotgunDamage);
                         if (enemy.GetHealth() <= 0)
                         {
+                            ExplodeEnemy(intersectingAngle, enemy, ob.Position);
                             return true;
                         }
+                        enemy.ApplyLinearForce(intersectingAngle, Knockback);
                     }
                 }
             }
@@ -136,6 +161,13 @@ namespace GameName1
             {
                 Firing = false;
                 m_ElapsedFrames = FireRate;
+                if (m_ReloadSound != null)
+                {
+                    m_ReloadSound.Stop();
+                    m_ReloadSound.Dispose();
+                }
+                m_ReloadSound = SoundBank.GetSoundInstance("SoundShotgunReload");
+                m_ReloadSound.Play();
             }
         }
         public override void LoadWeapon()
@@ -155,6 +187,61 @@ namespace GameName1
             array[2] = new AnimationInfo(TextureBank.GetTexture(blast3String), 12);
             array[3] = new AnimationInfo(TextureBank.GetTexture(blast4String), -1);
             m_FireAnimation = new AnimationManager(array, m_SavedShotInfo, 15);
+        }
+        public override void ExplodeEnemy(Vector2 intersectingAngle, IEnemy enemy, Vector2 pos)
+        {
+            List<Texture2D> gibTextures = enemy.GetExplodedParts();
+            for (int i = 0; i < gibTextures.Count; ++i)
+            {
+                float randomTorque = (-1 + (Weapon.WEAPON_RANDOM.Next(2)*2))*(500000 + (500000f*(float)Weapon.WEAPON_RANDOM.NextDouble()));
+                float randomDegree = -45f + (90f * (float)Weapon.WEAPON_RANDOM.NextDouble());
+                float randomForce = Knockback + (1500f * (float)Weapon.WEAPON_RANDOM.NextDouble());
+                ExplodedPart gib = new ExplodedPart();
+                gib.LoadContent(gibTextures[i], pos);
+                //so we dont divide by zero
+                if (intersectingAngle.X == 0) intersectingAngle.X += 0.000001f;
+                float originalDegrees = Utilities.RadiansToDegrees((float)Math.Atan(intersectingAngle.Y/intersectingAngle.X));
+                if (intersectingAngle.X < 0) originalDegrees += 180;
+                float newDegrees = Utilities.NormalizeDegrees(originalDegrees) + randomDegree;
+                Vector2 change = new Vector2((float)Math.Cos(Utilities.DegreesToRadians(newDegrees)), (float)Math.Sin(Utilities.DegreesToRadians(newDegrees)));
+                gib.ApplyLinearForce(change, randomForce);
+                //should be randomixed
+                gib.ApplyTorque(randomTorque);
+                UI.ActiveGibs.Add(gib);
+            }
+        }
+        public override void ApplyKickback(Player player)
+        {
+            Vector2 temp = new Vector2((float)Math.Cos(player.RotationAngle), (float)Math.Sin(player.RotationAngle)) * -215;
+            player.ApplyLinearForce(temp);
+        }
+        private static WeaponStats WeaponStats = new WeaponStats();
+        public override WeaponStats GetWeaponStats()
+        {
+            return WeaponStats;
+        }
+        public override void SetWeaponStats()
+        {
+            switch (WeaponStats.WeaponLevel)
+            {
+                case 0:
+                    WeaponStats.WeaponDamage = 5;
+                    WeaponStats.NextUpgradeCost = 100;
+                    break;
+                case 1:
+                    WeaponStats.WeaponDamage = 10;
+                    WeaponStats.NextUpgradeCost = 200;
+                    break;
+                case 2:
+                    WeaponStats.WeaponDamage = 200;
+                    WeaponStats.NextUpgradeCost = 500;
+                    break;
+            }
+        }
+        public override void UpgradeWeaponStats()
+        {
+            WeaponStats.WeaponLevel++;
+            SetWeaponStats();
         }
     }
 }

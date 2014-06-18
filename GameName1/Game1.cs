@@ -11,6 +11,7 @@ using FarseerPhysics.Factories;
 using System.IO.IsolatedStorage;
 using Microsoft.Xna.Framework.Media;
 using System.Windows.Threading;
+using GameName1;
 
 namespace GameName1
 {
@@ -19,40 +20,17 @@ namespace GameName1
     /// </summary>
     public class Game1 : Game
     {
-        public static TimeSpan TimeToDeath = TimeSpan.FromSeconds(30);
-        Song m_song;
         GraphicsDeviceManager _graphics;
         SpriteBatch _spriteBatch;
-
         public static int GameWidth;
         public static int GameHeight;
-
-        public static World m_World;
-        
-        public Player m_Player;
-
-        private List<GameObject> m_AllObjects = new List<GameObject>();
-        public ObjectManager GlobalObjectManager;
-
-        private Menu m_Menu = new Menu();
-
-        public static bool ZombiesSpawned = false;        
-        public static double GameTimer = 0;
-        
-        private UI UserInterface = new UI();
-        public int FrameCounter = 0;
-        public double elapsedTime = 0;
-        public static Random ZombieRandom = new Random(424242);
-        public bool SlowMotion = false;
-        GameState CurrentGameState = GameState.Playing;
-
-        public int NumZombies = 0;
+        private ScreenManager m_ScreenManager;
         public Game1()
         {
             _graphics = new GraphicsDeviceManager(this);
             Content.RootDirectory = "Content";
-            m_Player = new Player();
-            GlobalObjectManager = new ObjectManager();
+            m_ScreenManager = new ScreenManager(this);
+            m_ScreenManager.Initialize();
         }
 
         /// <summary>
@@ -67,22 +45,23 @@ namespace GameName1
             GameWidth = GraphicsDevice.Viewport.Width;
             GameHeight = GraphicsDevice.Viewport.Height;
             
-            m_World = new World(new Vector2(0, 0));
-            ConvertUnits.SetDisplayUnitToSimUnitRatio(5);
+            //m_World = new World(new Vector2(0, 0));
+            //ConvertUnits.SetDisplayUnitToSimUnitRatio(5);
 
-            Player p = Player.Load(Content);
-            if (p == null)
-            {
-                Vector2 playerPosition = new Vector2(GameWidth / 2, GameHeight / 2);
-                m_Player.Init(Content, playerPosition);
-            }
-            else
-            {
-                m_Player = p;
-            }
-            //init object manager and set objects for it
-            GlobalObjectManager.Init(m_Player, Content, m_World);
-
+            //Player p = Player.Load(Content);
+            //if (p == null)
+            //{
+            //    Vector2 playerPosition = new Vector2(GameWidth / 2, GameHeight / 2);
+            //    m_Player.Init(Content, playerPosition);
+            //}
+            //else
+            //{
+            //    m_Player = p;
+            //}
+            ////init object manager and set objects for it
+            //GlobalObjectManager.Init(m_Player, Content, m_World);
+            m_ScreenManager.AddScreen(new BackgroundScreen(), null);
+            m_ScreenManager.AddScreen(new MainMenuScreen(), null);
             base.Initialize();
         }
 
@@ -92,15 +71,10 @@ namespace GameName1
         /// </summary>
         protected override void LoadContent()
         {
-            // Create a new SpriteBatch, which can be used to draw textures.
-            _spriteBatch = new SpriteBatch(GraphicsDevice);
-            TextureBank.SetContentManager(Content);
-            m_Player.LoadContent(m_World);
-            UserInterface.LoadContent(Content, GameWidth, GameHeight);
-            m_Menu.LoadContent(Content);
-            GlobalObjectManager.LoadContent();
-
-            m_song = Content.Load<Song>("AuraQualic - DATA (FL Studio Remix)");
+                // Create a new SpriteBatch, which can be used to draw textures.
+                _spriteBatch = new SpriteBatch(GraphicsDevice);
+                m_ScreenManager.LoadContent(GraphicsDevice, _spriteBatch);
+                UpgradeMenuScreen.LoadUpgradeFields();
             // TODO: use this.Content to load your game content here
         }
 
@@ -111,6 +85,7 @@ namespace GameName1
         protected override void UnloadContent()
         {
             // TODO: Unload any non ContentManager content here
+            m_ScreenManager.UnloadContent();
             ObjectManager.AllGameObjects.Clear();
         }
         /// <summary>
@@ -120,63 +95,7 @@ namespace GameName1
         /// <param name="gameTime">Provides a snapshot of timing values.</param>
         protected override void Update(GameTime gameTime)
         {
-            TimeSpan customElapsedTime = gameTime.ElapsedGameTime;
-            if (SlowMotion)
-            {
-                customElapsedTime = new TimeSpan((long)(customElapsedTime.Ticks * 0.5));
-            }
-            if (CurrentGameState == GameState.Playing)
-            {
-                if (GamePad.GetState(0).Buttons.Back == ButtonState.Pressed)
-                {
-                    //m_AllObjects.Clear();
-                    //this.Exit();
-                    CurrentGameState = GameState.Menu;
-                    m_Menu.State = MenuState.Main;
-                }
-            }
-            Input.ProcessTouchInput();
-            switch (CurrentGameState) {
-                case GameState.Playing:
-                    if (TimeToDeath <= TimeSpan.FromSeconds(0))
-                    {
-                        //SlowMotion = true;
-                        ResetGame();
-                    }
-                    TimeToDeath -= gameTime.ElapsedGameTime;
-                    // TODO: Add your update logic here
-                    GameWidth = GraphicsDevice.Viewport.Width;
-                    GameHeight = GraphicsDevice.Viewport.Height;
-                    UserInterface.ProcessInput(m_Player);
-                    UserInterface.Update(TimeToDeath, customElapsedTime);
-                    //check if a game reset or zombie hit and save state and do the action here,
-                    //so that the game will draw the zombie intersecting the player
-                    m_Player.Update(customElapsedTime);
-                    foreach (GameObject g in ObjectManager.AllGameObjects)
-                    {
-                        g.Update(m_Player, customElapsedTime);
-                    }
-                    bool b = false;
-                    m_Player.CheckCollisions(out b, m_World);
-                    if (b) ResetGame();
-
-                    //cleanup dead objects
-                    GlobalObjectManager.Update(customElapsedTime);
-
-                    m_World.Step((float)customElapsedTime.TotalMilliseconds * 0.002f);
-                    break;
-                case GameState.Menu:
-                    bool toQuit;
-                    CurrentGameState = m_Menu.Update(out toQuit);
-                    if (toQuit)
-                    {
-                        m_Player.Save();
-                        Storage.Save<List<GameObject>>("GameObjects", "ObjectList.dat", ObjectManager.AllGameObjects);
-                        ObjectManager.AllGameObjects.Clear();
-                        this.Exit();
-                    }
-                    break;
-            }
+            m_ScreenManager.Update(gameTime);
             base.Update(gameTime);
         }
 
@@ -186,57 +105,25 @@ namespace GameName1
         /// <param name="gameTime">Provides a snapshot of timing values.</param>
         protected override void Draw(GameTime gameTime)
         {
-            GraphicsDevice.Clear(Color.CornflowerBlue);
-            switch (CurrentGameState) {
-                case GameState.Playing:
-                    // TODO: Add your drawing code here
-                    _spriteBatch.Begin();
-                    UserInterface.DrawBackground(_spriteBatch);
-                    GlobalObjectManager.Draw(_spriteBatch);
-                    m_Player.Draw(_spriteBatch);
-                    UserInterface.Draw(_spriteBatch, m_Player);
-                    _spriteBatch.End();
-                    break;
-                case GameState.Menu:
-                    _spriteBatch.Begin();
-                    m_Menu.Draw(_spriteBatch, m_Player);
-                    _spriteBatch.End();
-                    break;
-            }
+            //GraphicsDevice.Clear(Color.CornflowerBlue);
+            //switch (CurrentGameState) {
+            //    case GameState.Playing:
+            //        // TODO: Add your drawing code here
+            //        _spriteBatch.Begin();
+            //        UserInterface.DrawBackground(_spriteBatch);
+            //        GlobalObjectManager.Draw(_spriteBatch);
+            //        m_Player.Draw(_spriteBatch);
+            //        UserInterface.Draw(_spriteBatch, m_Player);
+            //        _spriteBatch.End();
+            //        break;
+            //    case GameState.Menu:
+            //        _spriteBatch.Begin();
+            //        m_Menu.Draw(_spriteBatch, m_Player);
+            //        _spriteBatch.End();
+            //        break;
+            //}
+            m_ScreenManager.Draw(gameTime);
             base.Draw(gameTime);
-        }
-
-        private void ResetGame()
-        {
-            ObjectManager.ClearGrid();
-            ObjectManager.AllGameObjects.Clear();
-            GlobalObjectManager.ResetGame();
-            TimeToDeath = TimeSpan.FromSeconds(40);
-        }
-        private void SpawnFace()
-        {
-            bool nearPlayer = true;
-            int x = 0;
-            int y = 0;
-            while (nearPlayer)
-            {
-                x = ZombieRandom.Next(GameWidth);
-                y = ZombieRandom.Next(GameHeight);
-
-                //don't spawn near player
-                Vector2 distanceFromPlayer = new Vector2(x - m_Player.Position.X, y - m_Player.Position.Y);
-                if (distanceFromPlayer.LengthSquared() >= (150.0f * 150f))
-                {
-                    nearPlayer = false;
-                }
-            }
-            Anubis z = new Anubis();
-            Vector2 temp = new Vector2();
-            temp.X = x;
-            temp.Y = y;
-            z.Position = temp;
-            z.LoadContent(m_World);
-            ObjectManager.AllGameObjects.Add(z);
         }
     }
 }

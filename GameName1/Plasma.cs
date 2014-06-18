@@ -25,6 +25,7 @@ namespace GameName1
         private List<Bullet> m_Bullets = new List<Bullet>();
         public Plasma() : base()
         {
+            Name = "Plasma";
             Spread = (float)Math.PI / 6;
             NumberOfBullets = 1;
             FireRate = 5;
@@ -61,6 +62,14 @@ namespace GameName1
                 temp.LoadContent();
                 m_Bullets.Add(temp);
                 m_ElapsedFrames = FireRate;
+
+                if (m_ShotSound != null)
+                {
+                    m_ShotSound.Stop();
+                    m_ShotSound.Dispose();
+                }
+                m_ShotSound = SoundBank.GetSoundInstance("SoundPlasmaShot");
+                m_ShotSound.Play();
             }
             if (m_Bullets.Count > 0)
             {
@@ -94,6 +103,10 @@ namespace GameName1
             }
             return false;
         }
+        public override void ApplyKickback(Player p)
+        {
+            
+        }
         public override void DrawWeapon(SpriteBatch _spriteBatch, Vector2 position, float rot)
         {
 
@@ -126,7 +139,54 @@ namespace GameName1
         }
         protected override void LoadTextures()
         {
-        }   
+        }
+        public override void ExplodeEnemy(Vector2 intersectingAngle, IEnemy enemy, Vector2 pos)
+        {
+            List<Texture2D> gibTextures = enemy.GetExplodedParts();
+            float shotgunSpreadAngle = 60;
+            float singleAngle = (shotgunSpreadAngle / (float)gibTextures.Count);
+            float singleAngleRadians = Utilities.DegreesToRadians(singleAngle);
+            Vector2 singleAngleVec = Utilities.RadiansToVector2(singleAngleRadians);
+            float startingPoint = singleAngle * gibTextures.Count / 2;
+            for (int i = 0; i < gibTextures.Count; ++i)
+            {
+                ExplodedPart gib = new ExplodedPart();
+                gib.LoadContent(gibTextures[i], pos);
+                Vector2 halfAngle = Utilities.RadiansToVector2(Utilities.DegreesToRadians(-30));
+                gib.ApplyLinearForce(intersectingAngle - (halfAngle) + (i * 2 * halfAngle), Knockback * 1.5f);
+                //shoul be randomixed
+                gib.ApplyTorque(5000f);
+                UI.ActiveGibs.Add(gib);
+            }
+        }
+        private static WeaponStats WeaponStats = new WeaponStats();
+        public override WeaponStats GetWeaponStats()
+        {
+            return WeaponStats;
+        }
+        public override void SetWeaponStats()
+        {
+            switch (WeaponStats.WeaponLevel)
+            {
+                case 0:
+                    WeaponStats.WeaponDamage = 10;
+                    WeaponStats.NextUpgradeCost = 100;
+                    break;
+                case 1:
+                    WeaponStats.WeaponDamage = 15;
+                    WeaponStats.NextUpgradeCost = 200;
+                    break;
+                case 2:
+                    WeaponStats.WeaponDamage = 25;
+                    WeaponStats.NextUpgradeCost = 500;
+                    break;
+            }
+        }
+        public override void UpgradeWeaponStats()
+        {
+            WeaponStats.WeaponLevel++;
+            SetWeaponStats();
+        }
     }
     public class Bullet : GameObject
     {

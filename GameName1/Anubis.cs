@@ -15,7 +15,7 @@ namespace GameName1
     [KnownType(typeof(Anubis))]
     [KnownType(typeof(GameObject))]
     [DataContract]
-    public class Anubis : GameObject
+    public class Anubis : GameObject, IEnemy
     {
         public enum MotionState
         {
@@ -50,16 +50,12 @@ namespace GameName1
         public Anubis()
             : base()
         {
-            LifeTotal = 40;
+            LifeTotal = 80;
 
         }
 
         public void LoadContent(World world)
         {
-            if (m_Texture == null)
-            {
-                m_Texture = TextureBank.GetTexture("Face");
-            }
             m_State = MotionState.Locked;
             RotationAngle = (float)GameObject.RANDOM_GENERATOR.NextDouble();
             m_Direction.X = (float)Math.Cos(RotationAngle);
@@ -79,10 +75,19 @@ namespace GameName1
             }
             _circleBody = BodyFactory.CreateCircle(world, ConvertUnits.ToSimUnits(35 / 2f), 1f, ConvertUnits.ToSimUnits(Position));
             _circleBody.BodyType = BodyType.Dynamic;
-            _circleBody.Mass = 0.2f;
-            _circleBody.LinearDamping = 2f;
+            _circleBody.Mass = 5f;
+            _circleBody.LinearDamping = 3f;
+            _circleBody.Restitution = .7f;
+            LoadExplodedParts();
         }
-
+        public static void LoadTextures()
+        {
+            if (m_Texture == null)
+            {
+                m_Texture = TextureBank.GetTexture("Face");
+            }
+            //TODO load exploded textures here
+        }
         //moves a set amount per frame toward a certain location
         public override void Move(Microsoft.Xna.Framework.Vector2 loc, TimeSpan elapsedTime)
         {
@@ -124,12 +129,14 @@ namespace GameName1
         public override void Update(Player player, TimeSpan elapsedTime)
         {
             Vector2 playerPosition = player.Position;
-
+            ObjectManager.GetCell(Position).Remove(this);
             //get a normalized direction toward the point that was passed in, probably the player
             Vector2 vec = new Vector2(playerPosition.X - Position.X, playerPosition.Y - Position.Y);
-            if (vec.LengthSquared() <= (275.0f * 275.0f) && m_State != MotionState.Attacking)
+            float temp = vec.LengthSquared();
+
+            if (temp <= (275.0f * 275.0f) && m_State != MotionState.Attacking)
             {
-                if (vec.LengthSquared() <= (20.0f * 20.0f))
+                if (vec.LengthSquared() <= (80.0f * 80.0f))
                 {
                     m_State = MotionState.Attacking;
                 }
@@ -159,26 +166,30 @@ namespace GameName1
                 RotationAngle += (float)(2*Math.PI*0.02);
                 --m_FramesLeftAttacking;
             }
+            ObjectManager.GetCell(Position).Add(this);
             bodyPosition = _circleBody.Position;
         }
         public override void Draw(SpriteBatch spriteBatch)
         {
             spriteBatch.Draw(m_Texture, ConvertUnits.ToDisplayUnits(_circleBody.Position), null, Color.White, RotationAngle, m_Origin, 1.0f, SpriteEffects.None, 0f);
         }
-
-        public void ApplyLinearForce(Vector2 angle, float amount)
-        {
-            Vector2 impulse = Vector2.Normalize(angle) * amount;
-            _circleBody.ApplyLinearImpulse(impulse);
-        }
-
+        #region IEnemy
         public void CleanBody()
         {
             if (_circleBody != null)
             {
-                Game1.m_World.RemoveBody(_circleBody);
+                GameplayScreen.m_World.RemoveBody(_circleBody);
 
             }
+        }
+        public List<Texture2D> GetExplodedParts()
+        {
+            return ExplodedParts;
+        }
+        public void ApplyLinearForce(Vector2 angle, float amount)
+        {
+            Vector2 impulse = Vector2.Normalize(angle) * amount;
+            _circleBody.ApplyLinearImpulse(impulse);
         }
         public void AddToHealth(int amount)
         {
@@ -188,7 +199,29 @@ namespace GameName1
         {
             return LifeTotal;
         }
-
+        public int GetDamageAmount()
+        {
+            return 15;
+        }
+        protected override void LoadExplodedParts()
+        {
+            ExplodedParts.Add(TextureBank.GetTexture("AnubisPart1"));
+            ExplodedParts.Add(TextureBank.GetTexture("AnubisPart2"));
+            ExplodedParts.Add(TextureBank.GetTexture("AnubisPart3"));
+        }
+        public void DoCollision(Player player)
+        {
+            if (m_State == MotionState.Attacking)
+            {
+                Vector2 dirOfPlayer = new Vector2(player.Position.X - Position.X, player.Position.Y - Position.Y);
+                dirOfPlayer *= 700f;
+                player.ApplyLinearForce(dirOfPlayer);
+                //player.LifeTotal -= GetDamageAmount();   
+            }
+            
+        }
+        #endregion
+        #region Save/Load
         public override void Save()
         {
             Storage.Save<Anubis>("", "", this);
@@ -205,5 +238,6 @@ namespace GameName1
             _circleBody.LinearDamping = 2f;
             _circleBody.Position = bodyPosition;
         }
+        #endregion
     }
 }

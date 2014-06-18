@@ -12,9 +12,10 @@ using System;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Input.Touch;
 using System.IO;
+using Microsoft.Xna.Framework.Content;
 #endregion
 
-namespace GameStateManagement
+namespace GameName1
 {
     /// <summary>
     /// Enum describes the screen transition state.
@@ -231,7 +232,7 @@ namespace GameStateManagement
         /// <summary>
         /// Load graphics content for the screen.
         /// </summary>
-        public virtual void LoadContent() { }
+        public virtual void LoadContent(){ }
 
 
         /// <summary>
@@ -332,7 +333,7 @@ namespace GameStateManagement
         /// is only called when the screen is active, and not when some other
         /// screen has taken the focus.
         /// </summary>
-        public virtual void HandleInput(InputState input) { }
+        public virtual void HandleInput(Input input) { }
 
 
         /// <summary>

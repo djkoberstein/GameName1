@@ -11,7 +11,7 @@
 using Microsoft.Xna.Framework;
 #endregion
 
-namespace GameStateManagement
+namespace GameName1
 {
     /// <summary>
     /// The main menu screen is the first thing displayed when the game starts up.
@@ -69,6 +69,13 @@ namespace GameStateManagement
         /// When the user cancels the main menu, we exit the game.
         /// </summary>
         protected override void OnCancel(PlayerIndex playerIndex)
+        {
+            ScreenManager.Game.Exit();
+        }
+        /// <summary>
+        /// When the user cancels the main menu, we exit the game.
+        /// </summary>
+        protected override void OnCancel()
         {
             ScreenManager.Game.Exit();
         }

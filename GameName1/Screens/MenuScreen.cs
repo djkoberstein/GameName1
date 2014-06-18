@@ -16,7 +16,7 @@ using Microsoft.Xna.Framework.Input.Touch;
 using Microsoft.Xna.Framework.Input;
 #endregion
 
-namespace GameStateManagement
+namespace GameName1
 {
     /// <summary>
     /// Base class for screens that contain a menu of options. The user can
@@ -27,9 +27,9 @@ namespace GameStateManagement
         #region Fields
 
         // the number of pixels to pad above and below menu entries for touch input
-        const int menuEntryPadding = 10;
+        protected const int menuEntryPadding = 100;
 
-        List<MenuEntry> menuEntries = new List<MenuEntry>();
+        protected List<MenuEntry> menuEntries = new List<MenuEntry>();
         int selectedEntry = 0;
         string menuTitle;
 
@@ -90,13 +90,12 @@ namespace GameStateManagement
         /// Responds to user input, changing the selected entry and accepting
         /// or cancelling the menu.
         /// </summary>
-        public override void HandleInput(InputState input)
+        public override void HandleInput(Input input)
         {
             // we cancel the current menu screen if the user presses the back button
-            PlayerIndex player;
-            if (input.IsNewButtonPress(Buttons.Back, ControllingPlayer, out player))
+            if (input.IsNewKeyPress(Buttons.Back))
             {
-                OnCancel(player);
+                OnCancel();
             }
 
             // look for any taps that occurred and select any entries that were tapped
@@ -141,7 +140,13 @@ namespace GameStateManagement
         {
             ExitScreen();
         }
-
+        /// <summary>
+        /// Handler for when the user has cancelled the menu.
+        /// </summary>
+        protected virtual void OnCancel()
+        {
+            ExitScreen();
+        }
 
         /// <summary>
         /// Helper overload makes it easy to use OnCancel as a MenuEntry event handler.

@@ -54,10 +54,6 @@ namespace GameName1
         
         public void LoadContent(World world)
         {
-            if (m_Texture == null)
-            {
-                m_Texture = TextureBank.GetTexture("kevinZombie");
-            }
             m_State = MotionState.Locked;
             RotationAngle = (float)GameObject.RANDOM_GENERATOR.NextDouble();
             m_Direction.X = (float)Math.Cos(RotationAngle);
@@ -77,10 +73,21 @@ namespace GameName1
             }
             _circleBody = BodyFactory.CreateCircle(world, ConvertUnits.ToSimUnits(35 / 2f), 1f, ConvertUnits.ToSimUnits(Position));
             _circleBody.BodyType = BodyType.Dynamic;
-            _circleBody.Mass = 0.2f;
-            _circleBody.LinearDamping = 2f;
+            _circleBody.Mass = 5f;
+            _circleBody.LinearDamping = 3f;
+            _circleBody.Restitution = 1f;
+            LoadExplodedParts();
+            
         }
-
+        public static void LoadTextures()
+        {
+            if (m_Texture == null)
+            {
+                m_Texture = TextureBank.GetTexture("kevinZombie");
+            }
+            TextureBank.GetTexture("ZombieBody");
+            TextureBank.GetTexture("ZombieHead");
+        }
         //moves a set amount per frame toward a certain location
         public override void Move(Microsoft.Xna.Framework.Vector2 loc, TimeSpan elapsedTime)
         {
@@ -151,19 +158,13 @@ namespace GameName1
             Vector2 temp = ConvertUnits.ToDisplayUnits(_circleBody.Position);
             spriteBatch.Draw(m_Texture, ConvertUnits.ToDisplayUnits(_circleBody.Position), null, Color.White, RotationAngle, m_Origin, 1.0f, SpriteEffects.None, 0f);
         }
-
-        public void ApplyLinearForce(Vector2 angle, float amount)
-        {
-            Vector2 impulse = Vector2.Normalize(angle) * amount;
-            _circleBody.ApplyLinearImpulse(impulse);
-        }
-
+        #region IEnemy
         public void CleanBody()
         {
             if (_circleBody != null)
             {
-                Game1.m_World.RemoveBody(_circleBody);
-                
+                GameplayScreen.m_World.RemoveBody(_circleBody);
+
             }
         }
         public void AddToHealth(int amount)
@@ -178,6 +179,28 @@ namespace GameName1
         {
             return DAMAGE_AMOUNT;
         }
+
+        public List<Texture2D> GetExplodedParts()
+        {
+            return ExplodedParts;
+        }
+        protected override void LoadExplodedParts()
+        {
+            ExplodedParts.Add(TextureBank.GetTexture("ZombieBody"));
+            ExplodedParts.Add(TextureBank.GetTexture("ZombieHead"));
+        }
+        public void ApplyLinearForce(Vector2 angle, float amount)
+        {
+            Vector2 impulse = Vector2.Normalize(angle) * amount;
+            _circleBody.ApplyLinearImpulse(impulse);
+        }
+        public void DoCollision(Player player)
+        {
+            //player.LifeTotal -= GetDamageAmount();
+            ObjectManager.RemoveObject(this);
+        }
+        #endregion
+        #region Save/Load
         public override void Save()
         {
             Storage.Save<Zombie>("", "", this);
@@ -194,5 +217,6 @@ namespace GameName1
             _circleBody.LinearDamping = 2f;
             _circleBody.Position = bodyPosition;
         }
+        #endregion
     }
 }

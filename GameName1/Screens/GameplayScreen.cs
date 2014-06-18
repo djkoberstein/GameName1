@@ -14,9 +14,14 @@ using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Content;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
+using FarseerPhysics.Dynamics;
+using GameName1;
+using FarseerPhysics;
+using Microsoft.Xna.Framework.Media;
+using Microsoft.Xna.Framework.Input.Touch;
 #endregion
 
-namespace GameStateManagement
+namespace GameName1
 {
     /// <summary>
     /// This screen implements the actual game logic. It is just a
@@ -25,16 +30,31 @@ namespace GameStateManagement
     /// </summary>
     class GameplayScreen : GameScreen
     {
+        private enum GameState
+        {
+            Countdown,
+            Playing,
+            Dying
+        }
         #region Fields
 
         ContentManager content;
-        SpriteFont gameFont;
-
-        Vector2 playerPosition = new Vector2(100, 100);
-        Vector2 enemyPosition = new Vector2(100, 100);
-
+        public static World m_World;
+        public Player m_Player;
+        public ObjectManager GlobalObjectManager;
+        private UI UserInterface = new UI();
+        public bool SlowMotion = false;
+        public static TimeSpan TimeToDeath;
+        private TouchCollection TouchesCollected;
+        private bool isLoaded;
+        private bool isUpdated;
+        private bool isPaused = false;
+        private TimeSpan m_CountdownTime;
+        Song m_song;
         Random random = new Random();
+        private GameState m_GameState;
 
+        RenderTarget2D backgroundTexture;
         #endregion
 
         #region Initialization
@@ -47,6 +67,12 @@ namespace GameStateManagement
         {
             TransitionOnTime = TimeSpan.FromSeconds(1.5);
             TransitionOffTime = TimeSpan.FromSeconds(0.5);
+            m_Player = new Player();
+            GlobalObjectManager = new ObjectManager();
+            isLoaded = false;
+            isUpdated = false;
+            m_GameState = GameState.Countdown;
+            m_CountdownTime = TimeSpan.FromSeconds(5.5);
         }
 
 
@@ -56,19 +82,57 @@ namespace GameStateManagement
         public override void LoadContent()
         {
             if (content == null)
-                content = new ContentManager(ScreenManager.Game.Services, "Content");
+                content = ScreenManager.Game.Content;
 
-            gameFont = content.Load<SpriteFont>("gamefont");
+            //gameFont = content.Load<SpriteFont>("GSMgamefont");
 
-            // A real game would probably have more content than this sample, so
-            // it would take longer to load. We simulate that by delaying for a
-            // while, giving you a chance to admire the beautiful loading screen.
-            Thread.Sleep(1000);
+            m_World = new World(new Vector2(0, 0));
+            ConvertUnits.SetDisplayUnitToSimUnitRatio(5);
 
+            Player p = Player.Load(content);
+            if (p == null)
+            {
+                Vector2 playerPosition = new Vector2(Game1.GameWidth / 2, Game1.GameHeight / 2);
+                m_Player.Init(content, playerPosition);
+            }
+            else
+            {
+                m_Player = p;
+            }
+            //init object manager and set objects for it
+            GlobalObjectManager.Init(m_Player, content, m_World);
+            TextureBank.SetContentManager(content);
+            SoundBank.SetContentManager(content);
+            m_Player.LoadContent(m_World);
+            UserInterface.LoadContent(content, Game1.GameWidth, Game1.GameHeight);
+            GlobalObjectManager.LoadContent();
+
+            m_song = SoundBank.GetSong("AuraQualic - DATA (FL Studio Remix)");
+            TimeToDeath = TimeSpan.FromSeconds(30);
+            UserInterface.SetTimeToDeath(TimeToDeath);
+
+            Zombie.LoadTextures();
+            Slime.LoadTextures();
+            Anubis.LoadTextures();
+
+            isLoaded = true;
+            Viewport viewport = ScreenManager.GraphicsDevice.Viewport;
+            backgroundTexture = new RenderTarget2D(ScreenManager.GraphicsDevice, viewport.Width, viewport.Height, false,
+                                            SurfaceFormat.Color, DepthFormat.None, ScreenManager.GraphicsDevice.PresentationParameters.MultiSampleCount, RenderTargetUsage.PreserveContents);
             // once the load has finished, we use ResetElapsedTime to tell the game's
             // timing mechanism that we have just finished a very long frame, and that
             // it should not try to catch up.
+
+            SpriteBatch spriteBatch = ScreenManager.SpriteBatch;
+
+            GraphicsDevice device = ScreenManager.GraphicsDevice;
+            device.SetRenderTarget(backgroundTexture);
+            spriteBatch.Begin();
+            UserInterface.DrawBackground(spriteBatch);
+            spriteBatch.End();
             ScreenManager.Game.ResetElapsedTime();
+
+            m_World.Step(0f);
         }
 
 
@@ -77,7 +141,7 @@ namespace GameStateManagement
         /// </summary>
         public override void UnloadContent()
         {
-            content.Unload();
+            //content.Unload();
         }
 
 
@@ -95,76 +159,122 @@ namespace GameStateManagement
                                                        bool coveredByOtherScreen)
         {
             base.Update(gameTime, otherScreenHasFocus, coveredByOtherScreen);
-
+            if (ScreenState == ScreenState.Active && isPaused)
+            {
+                isPaused = false;
+            }
             if (IsActive)
             {
-                // Apply some random jitter to make the enemy move around.
-                const float randomization = 10;
+                TimeSpan customElapsedTime = gameTime.ElapsedGameTime;
+                try
+                {
+                    if (isPaused)
+                    {
+                        return;
+                    }
+                    switch (m_GameState)
+                    {
+                        case GameState.Countdown:
+                            m_CountdownTime -= customElapsedTime;
+                            if (m_CountdownTime < TimeSpan.FromSeconds(1))
+                            {
+                                m_GameState = GameState.Playing;
+                            }
+                            UserInterface.Update(customElapsedTime);
+                            break;
+                        case GameState.Playing:
+                            //if (SlowMotion)
+                            //{
+                            //    customElapsedTime = new TimeSpan((long)(customElapsedTime.Ticks * 0.5));
+                            //}
 
-                enemyPosition.X += (float)(random.NextDouble() - 0.5) * randomization;
-                enemyPosition.Y += (float)(random.NextDouble() - 0.5) * randomization;
+                            if (TimeToDeath < TimeSpan.FromSeconds(0))
+                            {
+                                //SlowMotion = true;
+                                //ResetGame();
+                                TimeToDeath = TimeSpan.FromTicks(0);
+                                UserInterface.SetTimeToDeath(TimeToDeath);
+                                m_GameState = GameState.Dying;
+                                m_Player.SetPlayerToDyingState();
+                                return;
+                            }
+                            TimeToDeath -= gameTime.ElapsedGameTime;
+                            // TODO: Add your update logic here
+                            UserInterface.ProcessInput(m_Player, TouchesCollected);
+                            UserInterface.Update(customElapsedTime);
+                            UserInterface.SetTimeToDeath(TimeToDeath);
+                            //check if a game reset or zombie hit and save state and do the action here,
+                            //so that the game will draw the zombie intersecting the player
+                            m_Player.Update(customElapsedTime);
+                            foreach (GameObject g in ObjectManager.AllGameObjects)
+                            {
+                                g.Update(m_Player, customElapsedTime);
+                            }
+                            bool b = false;
+                            m_Player.CheckCollisions(out b, m_World);
+                            if (b)
+                            {
+                                m_GameState = GameState.Dying;
+                                //lets throw one update in here so we draw with the updated state
+                                m_Player.Update(customElapsedTime);
+                                return;
+                            }
+                            m_Player.CheckWeaponHits();
+                            //cleanup dead objects
+                            GlobalObjectManager.Update(customElapsedTime);
 
-                // Apply a stabilizing force to stop the enemy moving off the screen.
-                Vector2 targetPosition = new Vector2(
-                    ScreenManager.GraphicsDevice.Viewport.Width / 2 - gameFont.MeasureString("Insert Gameplay Here").X / 2, 
-                    200);
+                            m_World.Step((float)1.0f/60f);
+                            break;
+                        case GameState.Dying:
+                            if (m_Player.isDead)
+                            {
+                                PushDeathScreen();
+                                return;
+                            }
+                            m_Player.Update(customElapsedTime);
+                            break;
+                    }
+                    isUpdated = true;
+                }
+                catch (Exception)
+                {
+                }
+                SpriteBatch spriteBatch = ScreenManager.SpriteBatch;
 
-                enemyPosition = Vector2.Lerp(enemyPosition, targetPosition, 0.05f);
-
+                GraphicsDevice device = ScreenManager.GraphicsDevice;
+                device.SetRenderTarget(backgroundTexture);
+                spriteBatch.Begin();
+                UserInterface.DrawBakedGibs(spriteBatch);
+                spriteBatch.End();
                 // TODO: this game isn't very fun! You could probably improve
                 // it by inserting something more interesting in this space :-)
             }
         }
-
+        private void ResetGame()
+        {
+            GlobalObjectManager.ResetGame();
+            TimeToDeath = TimeSpan.FromSeconds(40);
+            m_CountdownTime = TimeSpan.FromSeconds(5.5);
+            m_GameState = GameState.Countdown;
+            m_Player.ResetPlayer();
+        }
 
         /// <summary>
         /// Lets the game respond to player input. Unlike the Update method,
         /// this will only be called when the gameplay screen is active.
         /// </summary>
-        public override void HandleInput(InputState input)
+        public override void HandleInput(Input input)
         {
-            if (input == null)
-                throw new ArgumentNullException("input");
-
-            // Look up inputs for the active player profile.
-            int playerIndex = (int)ControllingPlayer.Value;
-
-            KeyboardState keyboardState = input.CurrentKeyboardStates[playerIndex];
-            GamePadState gamePadState = input.CurrentGamePadStates[playerIndex];
-
-            // if the user pressed the back button, we return to the main menu
-            PlayerIndex player;
-            if (input.IsNewButtonPress(Buttons.Back, ControllingPlayer, out player))
+            if (input.IsNewKeyPress(Buttons.Back))
             {
-                LoadingScreen.Load(ScreenManager, false, ControllingPlayer, new BackgroundScreen(), new MainMenuScreen());
+                isPaused = true;
+                //ScreenManager.Game.Exit();
+                //return;
+                //this should actually create a menu overlay with the game underneathe
+                //this should involve adding a new menu screen for the pause
+                ScreenManager.AddScreen(new PauseMenu(), null);
             }
-            else
-            {
-                // Otherwise move the player position.
-                Vector2 movement = Vector2.Zero;
-
-                if (keyboardState.IsKeyDown(Keys.Left))
-                    movement.X--;
-
-                if (keyboardState.IsKeyDown(Keys.Right))
-                    movement.X++;
-
-                if (keyboardState.IsKeyDown(Keys.Up))
-                    movement.Y--;
-
-                if (keyboardState.IsKeyDown(Keys.Down))
-                    movement.Y++;
-
-                Vector2 thumbstick = gamePadState.ThumbSticks.Left;
-
-                movement.X += thumbstick.X;
-                movement.Y -= thumbstick.Y;
-
-                if (movement.Length() > 1)
-                    movement.Normalize();
-
-                playerPosition += movement * 2;
-            }
+            TouchesCollected = input.TouchState;
         }
 
 
@@ -173,28 +283,47 @@ namespace GameStateManagement
         /// </summary>
         public override void Draw(GameTime gameTime)
         {
-            // This game has a blue background. Why? Because!
-            ScreenManager.GraphicsDevice.Clear(ClearOptions.Target,
-                                               Color.CornflowerBlue, 0, 0);
-
-            // Our player and enemy are both actually just text strings.
-            SpriteBatch spriteBatch = ScreenManager.SpriteBatch;
-
-            spriteBatch.Begin();
-
-            spriteBatch.DrawString(gameFont, "// TODO", playerPosition, Color.Green);
-
-            spriteBatch.DrawString(gameFont, "Insert Gameplay Here",
-                                   enemyPosition, Color.DarkRed);
-
-            spriteBatch.End();
-
+            //make sure the game has loaded and has updated at least one frame
+            if (!isLoaded || !isUpdated)
+            {
+                return;
+            }
+            SpriteBatch _spriteBatch = ScreenManager.SpriteBatch;
+            switch (m_GameState)
+            {
+                case GameState.Dying:
+                case GameState.Playing:
+                    _spriteBatch.Begin();
+                    _spriteBatch.Draw(backgroundTexture, new Vector2(UI.OFFSET, 0), UserInterface.BackGroundHueColor);
+                    UserInterface.DrawDeathTimer(_spriteBatch);
+                    GlobalObjectManager.DrawSlimeTrails(_spriteBatch);
+                    GlobalObjectManager.DrawPowerUps(_spriteBatch);
+                    UserInterface.DrawActiveGibs(_spriteBatch);
+                    GlobalObjectManager.Draw(_spriteBatch);
+                    m_Player.Draw(_spriteBatch);
+                    UserInterface.Draw(_spriteBatch, m_Player);
+                    _spriteBatch.End();
+                    break;
+                case GameState.Countdown:
+                    _spriteBatch.Begin();
+                    _spriteBatch.Draw(backgroundTexture, new Vector2(UI.OFFSET, 0), UserInterface.BackGroundHueColor);
+                    //GlobalObjectManager.Draw(_spriteBatch);
+                    //m_Player.Draw(_spriteBatch);
+                    UserInterface.Draw(_spriteBatch, m_Player);
+                    UserInterface.DrawCountdown(_spriteBatch, m_CountdownTime);
+                    _spriteBatch.End();
+                    break;
+            }
             // If the game is transitioning on or off, fade it out to black.
-            if (TransitionPosition > 0)
+            if (TransitionPosition > 0 && !isPaused)
                 ScreenManager.FadeBackBufferToBlack(1f - TransitionAlpha);
         }
-
-
+        //push the death screen
+        private void PushDeathScreen()
+        {
+            isPaused = true;
+            ScreenManager.AddScreen(new DeathMenu(), null);
+        }
         #endregion
     }
 }

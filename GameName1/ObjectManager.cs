@@ -14,10 +14,13 @@ namespace GameName1
     {
         private const int GRID_DIVISIONS_X = 50;
         private const int GRID_DIVISIONS_Y = 50;
-        public static List<GameObject> AllGameObjects = new List<GameObject>();
+        public static List<GameObject> AllGameObjects;
         public static List<GameObject>[][] GameObjectGrid;
-        public static Random ZombieRandom = new Random(424242);
-        public static long FrameCounter = 0;
+        public static List<SlimeTrail> SlimeTrails;
+        public static List<PowerUp> PowerUpItems;
+
+        public static Random ZombieRandom = new Random();
+        public long FrameCounter = 0;
         public static bool itemMade = false;
         public static bool face = false;
         public static Player m_Player;
@@ -26,6 +29,7 @@ namespace GameName1
         private static int NumZombies = 0;
         private static int MaxZombies = 5;
         private PowerUp m_PowerUp;
+
         public void Init(Player p, ContentManager content, World world)
         {
             m_Player = p;
@@ -35,7 +39,7 @@ namespace GameName1
 
         public void LoadContent()
         {
-            AllGameObjects = Storage.Load<List<GameObject>>("GameObjects", "ObjectList.dat");
+            //AllGameObjects = Storage.Load<List<GameObject>>("GameObjects", "ObjectList.dat");
             if (AllGameObjects == null)
             {
                 AllGameObjects = new List<GameObject>();
@@ -47,22 +51,28 @@ namespace GameName1
                     g.Load(m_World);
                 }
             }
-            GameObjectGrid = new List<GameObject>[(Game1.GameWidth / GRID_DIVISIONS_X)+1][];
+            GameObjectGrid = new List<GameObject>[(Game1.GameWidth / GRID_DIVISIONS_X)+2][];
             for (int x = 0; x < GameObjectGrid.Length; ++x )
             {
-                GameObjectGrid[x] = new List<GameObject>[(Game1.GameHeight / GRID_DIVISIONS_Y)+1];
+                GameObjectGrid[x] = new List<GameObject>[(Game1.GameHeight / GRID_DIVISIONS_Y)+2];
                 for (int y = 0; y < GameObjectGrid[x].Length; ++y)
                 {
                     GameObjectGrid[x][y] = new List<GameObject>();
                 }
             }
+            PowerUpItems = new List<PowerUp>();
+            SlimeTrails = new List<SlimeTrail>();
+            AllGameObjects = new List<GameObject>();
         }
 
         public static List<GameObject> GetCell(Vector2 position)
         {
             int x = (int)position.X / GRID_DIVISIONS_X;
             int y = (int)position.Y / GRID_DIVISIONS_Y;
-
+            if (x >= GameObjectGrid.Length || x < 0 || y >= GameObjectGrid[0].Length || y < 0)
+            {
+                return new List<GameObject>();
+            }
             return GameObjectGrid[x][y];
         }
 
@@ -103,7 +113,7 @@ namespace GameName1
                 }
             }
         }
-        public void Update(TimeSpan elapsedTime)
+        public void CleanUp()
         {
             List<List<GameObject>> cellsToClean = new List<List<GameObject>>();
             foreach (GameObject ob in AllGameObjects)
@@ -122,12 +132,12 @@ namespace GameName1
                         RemoveObject(ob);
                     }
                 }
-                if (ob is PowerUp)
+            }
+            foreach (PowerUp p in PowerUpItems)
+            {
+                if (p.CanDelete)
                 {
-                    if (ob.CanDelete)
-                    {
-                        cellsToClean.Add(ObjectManager.GetCell(ob.Position));
-                    }
+                    cellsToClean.Add(ObjectManager.GetCell(p.Position));
                 }
             }
             foreach (List<GameObject> cell in cellsToClean)
@@ -135,9 +145,28 @@ namespace GameName1
                 cell.RemoveAll(x => x.CanDelete);
             }
             AllGameObjects.RemoveAll(x => x.CanDelete);
+            PowerUpItems.RemoveAll(x => x.CanDelete);
+            for (int i = 0; i < SlimeTrails.Count; ++i)
+            {
+                SlimeTrails[i].Update();
+                if (!SlimeTrails[i].Alive)
+                {
+                    SlimeTrails.Remove(SlimeTrails[i]);
+                    --i;
+                }
+            }
+        }
+        public void Update(TimeSpan elapsedTime)
+        {
+            CleanUp();
+
             if (FrameCounter % 100 == 0 && NumZombies < MaxZombies)
             {
                 SpawnZombie();
+            }
+            if ((FrameCounter % 150) == 0)
+            {
+                SpawnFace();
             }
             if (FrameCounter > 1000)
             {
@@ -164,9 +193,22 @@ namespace GameName1
                 }
             }
         }
+        public void DrawSlimeTrails(SpriteBatch spriteBatch)
+        {
+            foreach (SlimeTrail trail in SlimeTrails)
+            {
+                trail.Draw(spriteBatch);
+            }
+        }
+        public void DrawPowerUps(SpriteBatch spriteBatch)
+        {
+            foreach (PowerUp p in PowerUpItems)
+            {
+                p.Draw(spriteBatch);
+            }
+        }
         public static void RemoveObject(GameObject obj)
         {
-
             if (obj is IEnemy)
             {
                 ((IEnemy)obj).CleanBody();
@@ -177,7 +219,16 @@ namespace GameName1
             }
             obj.CanDelete = true;
         }
-
+        public void ResetGame()
+        {
+            ClearGrid();
+            AllGameObjects.Clear();
+            FrameCounter = 0;
+            itemMade = false;
+            face = false;
+            m_Player.Score = 0;
+            NumZombies = 0;
+        }
         private void SpawnZombie()
         {
             bool nearPlayer = true;
@@ -196,22 +247,11 @@ namespace GameName1
                 }
             }
             Zombie z = new Zombie();
-            Vector2 temp = new Vector2();
-            temp.X = x;
-            temp.Y = y;
+            Vector2 temp = new Vector2(x,y);
             z.Position = temp;
             z.LoadContent(m_World);
             AllGameObjects.Add(z);
             ++NumZombies;
-        }
-
-        public void ResetGame()
-        {
-            FrameCounter = 0;
-            itemMade = false;
-            face = false;
-            m_Player.Score = 0;
-            NumZombies = 0;
         }
 
         private void MakeItem()
@@ -246,7 +286,7 @@ namespace GameName1
             temp.Y = MathHelper.Clamp(y, 0, Game1.GameHeight-15);
             m_PowerUp.Position = temp;
             m_PowerUp.LoadContent();
-            ObjectManager.AllGameObjects.Add(m_PowerUp);
+            ObjectManager.PowerUpItems.Add(m_PowerUp);
             GetCell(m_PowerUp.Position).Add(m_PowerUp);
         }
         //probably should add spawn face in here
@@ -274,6 +314,31 @@ namespace GameName1
             z.Position = temp;
             z.LoadContent(m_World);
             AllGameObjects.Add(z);
+        }
+        private void SpawnFace()
+        {
+            bool nearPlayer = true;
+            int x = 0;
+            int y = 0;
+            while (nearPlayer)
+            {
+                x = ZombieRandom.Next(Game1.GameWidth);
+                y = ZombieRandom.Next(Game1.GameHeight);
+
+                //don't spawn near player
+                Vector2 distanceFromPlayer = new Vector2(x - m_Player.Position.X, y - m_Player.Position.Y);
+                if (distanceFromPlayer.LengthSquared() >= (150.0f * 150f))
+                {
+                    nearPlayer = false;
+                }
+            }
+            Anubis z = new Anubis();
+            Vector2 temp = new Vector2();
+            temp.X = x;
+            temp.Y = y;
+            z.Position = temp;
+            z.LoadContent(m_World);
+            ObjectManager.AllGameObjects.Add(z);
         }
     }
 }

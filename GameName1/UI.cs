@@ -12,7 +12,7 @@ namespace GameName1
 {
     class UI
     {
-        private string m_TimeToDeathString;
+        private TimeSpan TimeToDeath;
         private Texture2D m_StatusBackground;
         public static SpriteFont m_SpriteFont;
         private Texture2D m_FireButton;
@@ -48,6 +48,19 @@ namespace GameName1
         private bool ThumbStickPressed;
         private SpriteFont ColunaFont;
         public static float ThumbStickAngle;
+
+        private int BackGroundHueCounter = -250;
+        public Color BackGroundHueColor = new Color(255,0,0);
+        private const int MAX_PERIOD = 600;
+        private const int MIN_PERIOD = 40;
+        private int m_Period;
+        //start increasing oscillation at 30 seconds
+        private const int OSCILLATE_START = 10;
+        private const int SCALE = 200;
+
+        private List<ExplodedPart> BakedGibs = new List<ExplodedPart>();
+        public static List<ExplodedPart> ActiveGibs = new List<ExplodedPart>();
+
         public UI()
         {
         }
@@ -80,21 +93,49 @@ namespace GameName1
             WeaponSlotRec = new Rectangle((int)(WeaponSlotPosition.X - ((m_FireButton.Width*WeaponSlotScale.X)/2)), (int)(WeaponSlotPosition.Y - ((m_FireButton.Height*WeaponSlotScale.Y)/2)), PlayfieldBottom, PlayfieldBottom);
             ThumbStickPressed = false;
             ThumbStickPoint = StopButtonPosition;
+            ActiveGibs.Clear();
         }
 
-        public void Update(TimeSpan timeToDeath, TimeSpan elapsedTime)
+        public void Update(TimeSpan elapsedTime)
         {
-            m_TimeToDeathString = timeToDeath.ToString(@"mm\:ss\:ff");
+            m_Period = MAX_PERIOD;
+            //if (timeToDeath.Seconds <= OSCILLATE_START)
+            //{
+            //    m_Period = (int)(timeToDeath.TotalSeconds / OSCILLATE_START * (MAX_PERIOD - MIN_PERIOD)) + MIN_PERIOD;
+            //}
+            if (TimeToDeath.TotalSeconds <= OSCILLATE_START)
+            {
+                m_Period = MIN_PERIOD;
+            }
+            if (BackGroundHueCounter >= m_Period + 1)
+            {
+                BackGroundHueCounter = 0;
+            }
+            int delta = (int)(Math.Sin(BackGroundHueCounter * 2 * Math.PI / m_Period) * (SCALE / 2) + (SCALE / 2));
+            ++BackGroundHueCounter;
+            BackGroundHueColor = new Color(255 - delta, delta, 0);
+            for (int i = 0; i < ActiveGibs.Count; ++i)
+            {
+                ExplodedPart part = ActiveGibs[i];
+                bool hasStopped;
+                part.Update(out hasStopped);
+                if (hasStopped)
+                {
+                    BakedGibs.Add(part);
+                    ActiveGibs.Remove(part);
+                    i--;
+                }
+            }
         }
 
-        public void ProcessInput(Player p)
+        public void ProcessInput(Player p, TouchCollection input)
         {
             m_FireButtonColor = Color.White;
             m_StopButtonColor = Color.White;
             p.Moving = true;
             bool isFireDown = false;
             bool isStopDown = false;
-            foreach (TouchLocation touch in Input.TouchesCollected) {
+            foreach (TouchLocation touch in input) {
                 if (touch.Id == ThumbStickPointId)
                 {
                     if (touch.State == TouchLocationState.Released)
@@ -178,11 +219,40 @@ namespace GameName1
                 spriteBatch.Draw(p.RedFlashTexture, new Vector2(PlayfieldBottom, 0), null, Color.White, 0, new Vector2(0,0),Utilities.GetSpriteScaling(new Vector2(GameWidth-PlayfieldBottom, GameHeight), new Vector2(p.RedFlashTexture.Width, p.RedFlashTexture.Height)) ,SpriteEffects.None, 0);
             }
         }
-
         public void DrawBackground(SpriteBatch spriteBatch)
         {
-            spriteBatch.Draw(m_Background, new Vector2(OFFSET, 0), Color.White);
-            spriteBatch.DrawString(ColunaFont, m_TimeToDeathString, new Vector2(GameWidth - 175, 300), Color.Red * 0.45f, Utilities.DegreesToRadians(90.0f), new Vector2(0, 0), new Vector2(3,2), SpriteEffects.None, 0.0f);
+            spriteBatch.Draw(m_Background, new Vector2(0, 0), Color.White);
+        }
+        public void DrawActiveGibs(SpriteBatch spriteBatch)
+        {
+            foreach (ExplodedPart part in ActiveGibs)
+            {
+                part.Draw(spriteBatch, BackGroundHueColor);
+            }
+        }
+        public void DrawBakedGibs(SpriteBatch spriteBatch)
+        {
+            foreach (ExplodedPart part in BakedGibs)
+            {
+                part.DrawOffset(spriteBatch, BackGroundHueColor);
+                part.CleanBody();
+            }
+            BakedGibs.Clear();
+        }
+        public void DrawDeathTimer(SpriteBatch spriteBatch)
+        {
+            spriteBatch.DrawString(ColunaFont, TimeToDeath.ToString(@"mm\:ss\:ff"), new Vector2(GameWidth - 175, 300), Color.Blue * 0.45f, Utilities.DegreesToRadians(90.0f), new Vector2(0, 0), new Vector2(3, 2), SpriteEffects.None, 0.0f);
+        }
+
+        public void DrawCountdown(SpriteBatch spriteBatch, TimeSpan countdown)
+        {
+            string countdownString = countdown.ToString(@"ss");
+            spriteBatch.DrawString(ColunaFont, countdownString, new Vector2(GameWidth - 175, 500), Color.White, Utilities.DegreesToRadians(90.0f), new Vector2(0, 0), new Vector2(3, 2), SpriteEffects.None, 0.0f);
+        }
+
+        public void SetTimeToDeath(TimeSpan time)
+        {
+            TimeToDeath = time;
         }
     }
 }
