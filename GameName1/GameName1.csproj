@@ -99,12 +99,29 @@
       <DependentUpon>AppResources.resx</DependentUpon>
     </Compile>
     <Compile Include="Rifle.cs" />
+    <Compile Include="ScreenManager\GameScreen.cs" />
+    <Compile Include="ScreenManager\InputState.cs" />
+    <Compile Include="ScreenManager\ScreenManager.cs" />
+    <Compile Include="Screens\BackgroundScreen.cs" />
+    <Compile Include="Screens\DeathMenu.cs" />
+    <Compile Include="Screens\GameplayScreen.cs" />
+    <Compile Include="Screens\LoadingScreen.cs" />
+    <Compile Include="Screens\MainMenuScreen.cs" />
+    <Compile Include="Screens\MenuEntry.cs" />
+    <Compile Include="Screens\MenuScreen.cs" />
+    <Compile Include="Screens\MessageBoxScreen.cs" />
+    <Compile Include="Screens\OptionsMenuScreen.cs" />
+    <Compile Include="Screens\PauseMenu.cs" />
+    <Compile Include="Screens\PlayerIndexEventArgs.cs" />
+    <Compile Include="Screens\UpgradeMenuScreen.cs" />
     <Compile Include="Shotgun.cs" />
     <Compile Include="Slime.cs" />
+    <Compile Include="SoundBank.cs" />
     <Compile Include="Storage.cs" />
     <Compile Include="TextureBank.cs" />
     <Compile Include="Triangle.cs" />
     <Compile Include="UI.cs" />
+    <Compile Include="UpgradeField.cs" />
     <Compile Include="Utilities.cs" />
     <Compile Include="Weapon.cs" />
     <Compile Include="Zombie.cs" />
@@ -161,6 +178,9 @@
     <Content Include="Content\Zombie.xnb" />
     <Content Include="Content\RED.xnb" />
     <Content Include="Content\ColunaFont.xnb" />
+    <Content Include="Content\GSMmenufont.xnb" />
+    <Content Include="Content\GSMblank.xnb" />
+    <Content Include="Content\GSMbackground.xnb" />
     <None Include="packages.config" />
     <None Include="Properties\AppManifest.xml" />
     <None Include="Properties\WMAppManifest.xml">
